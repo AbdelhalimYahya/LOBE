@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design System Color Variables */
+:root {
+  --Primary: #cc68a1;
+  --brand-primary: #b24f87;
+  --brand-primary-light-bg: rgb(204 104 161 / 0.10000000149011612);
+  --brand-buttons-status-default: rgb(204 104 161);
+  --brand-buttons-status-hover: rgb(179 71 129);
+  --brand-buttons-status-disabled: rgb(229 189 211);
+  --brand-buttons-status-focus-border: rgb(190 92 144);
+  --natural-white: rgb(255 255 255);
+  --natural-light-border: rgb(229 229 229);
+  --natural-default-border: rgb(194 194 194);
+  --natural-input-hint: rgb(162 162 162);
+  --natural-helper-text: rgb(117 117 117);
+  --natural-subtext-description: rgb(85 85 85);
+  --natural-primary-text: rgb(42 42 42);
+  --status-error: rgb(241 1 1);
+  --status-light-red: rgb(252 204 204);
+  --status-warning: rgb(255 191 19);
+  --status-light-yellow: rgb(255 242 218);
+  --status-success: rgb(34 176 125);
+  --status-light-green: rgb(211 239 229);
+}
+
+/* Minimal custom utilities - prefer Tailwind utilities */
+/* Add only if absolutely necessary */
+
+/* Scrollbar hide utility for horizontal carousels */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Line clamp utilities (if not provided by Tailwind) */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Force SVG fill color for brand icons */
+.force-brand-primary svg path,
+.force-brand-primary svg circle,
+.force-brand-primary svg rect,
+.force-brand-primary svg polygon,
+.force-brand-primary svg g path {
+  fill: var(--brand-primary) !important;
+}
+
+/* Force filled heart icon for favorites - use stroke to create filled appearance */
+.heart-filled span svg path {
+  fill: var(--brand-primary) !important;
+  stroke: var(--brand-primary) !important;
+  stroke-width: 2px !important;
+  stroke-linejoin: round !important;
+  stroke-linecap: round !important;
+  paint-order: stroke fill !important;
+}
+
+/* Alternative: Use a mask to create filled appearance */
+.heart-filled {
+  position: relative;
+  display: inline-block;
+}
+
+.heart-filled::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  background: var(--brand-primary);
+  border-radius: 50% 0 50% 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Ensure list markers are visible in RTL with flex */
+[dir="rtl"] ul.list-disc {
+  list-style-type: disc;
+  list-style-position: outside;
+}
+
+[dir="rtl"] ul.list-disc li {
+  display: list-item;
+}
+
+/* Scrollbar aligned to right in RTL layouts */
+.scrollbar-right {
+  direction: ltr;
+}
+
+.scrollbar-right > * {
+  direction: rtl;
+}
