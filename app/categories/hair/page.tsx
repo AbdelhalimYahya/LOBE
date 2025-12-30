@@ -2,7 +2,6 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
 import { authenticatedFetch } from "@/lib/auth";
@@ -85,12 +84,26 @@ function HairCategoryPageContent() {
   const [products, setProducts] = useState<HairProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const searchParams = useSearchParams();
+  const [pageParam, setPageParam] = useState<string | null>(null);
 
   // حالات الفلاتر
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [minSafety, setMinSafety] = useState<string>("all");
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        setPageParam(new URLSearchParams(window.location.search).get("page"));
+      } catch {
+        setPageParam(null);
+      }
+    };
+
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -157,7 +170,6 @@ function HairCategoryPageContent() {
   const totalProducts = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
 
-  const pageParam = searchParams.get("page");
   let pageNumberRaw = Number(pageParam || "1");
   if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
   const currentPage = Math.min(pageNumberRaw, totalPages);
@@ -383,6 +395,7 @@ function HairCategoryPageContent() {
                     {currentPage > 1 && (
                       <Link
                         href={`?page=1`}
+                        onClick={() => setPageParam("1")}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         «
@@ -392,6 +405,7 @@ function HairCategoryPageContent() {
                     {currentPage > 1 && (
                       <Link
                         href={`?page=${currentPage - 1}`}
+                        onClick={() => setPageParam(String(currentPage - 1))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         ‹
@@ -418,6 +432,7 @@ function HairCategoryPageContent() {
                           <Link
                             key={page}
                             href={`?page=${page}`}
+                            onClick={() => setPageParam(String(page))}
                             className={[
                               "min-w-[36px] h-9 flex items-center justify-center rounded-full border text-xs md:text-sm transition-all",
                               isActive
@@ -434,6 +449,7 @@ function HairCategoryPageContent() {
                     {currentPage < totalPages && (
                       <Link
                         href={`?page=${currentPage + 1}`}
+                        onClick={() => setPageParam(String(currentPage + 1))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         ›
@@ -443,6 +459,7 @@ function HairCategoryPageContent() {
                     {currentPage < totalPages && (
                       <Link
                         href={`?page=${totalPages}`}
+                        onClick={() => setPageParam(String(totalPages))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         »

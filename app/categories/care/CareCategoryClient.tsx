@@ -1,12 +1,11 @@
 // app/categories/care/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
 import { authenticatedFetch } from "@/lib/auth";
-
-export const dynamic = "force-dynamic";
 
 type SkincareProduct = {
   skincare_id: number;
@@ -16,14 +15,6 @@ type SkincareProduct = {
   avg_rating: number | null;
   reviews_count: number | null;
   brand_name: string | null;
-};
-
-// ✅ شكل الـ Pagination من DRF
-type PaginatedResponse<T> = {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -38,7 +29,7 @@ function extractList<T>(payload: unknown): T[] {
     "results" in payload &&
     Array.isArray((payload as Record<string, unknown>).results)
   ) {
-    return ((payload as Record<string, unknown>).results as T[]);
+    return (payload as Record<string, unknown>).results as T[];
   }
 
   return [];
@@ -74,52 +65,24 @@ function generatePageNumbers(
 
   pages.push(1);
   if (left > 2) pages.push("dots");
-  for (let i = left; i <= right; i++) pages.push(i);
+  for (let i = left; i <= right; i) pages.push(i);
   if (right < totalPages - 1) pages.push("dots");
   if (totalPages > 1) pages.push(totalPages);
 
   return pages;
 }
 
-export default function CareCategoryPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          Loading...
-        </div>
-      }
-    >
-      <CareCategoryPageContent />
-    </Suspense>
-  );
-}
-
-function CareCategoryPageContent() {
+export default function CareCategoryClient() {
   const [products, setProducts] = useState<SkincareProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [pageParam, setPageParam] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
   // حالات الفلاتر
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [selectedSkinType, setSelectedSkinType] = useState<string>("all");
   const [minRating, setMinRating] = useState<string>("all");
-
-  useEffect(() => {
-    const read = () => {
-      try {
-        setPageParam(new URLSearchParams(window.location.search).get("page"));
-      } catch {
-        setPageParam(null);
-      }
-    };
-
-    read();
-    window.addEventListener("popstate", read);
-    return () => window.removeEventListener("popstate", read);
-  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -203,6 +166,7 @@ function CareCategoryPageContent() {
   const totalProducts = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
 
+  const pageParam = searchParams.get("page");
   let pageNumberRaw = Number(pageParam || "1");
   if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
   const currentPage = Math.min(pageNumberRaw, totalPages);
@@ -426,7 +390,6 @@ function CareCategoryPageContent() {
                     {currentPage > 1 && (
                       <Link
                         href={`?page=1`}
-                        onClick={() => setPageParam("1")}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         «
@@ -436,7 +399,6 @@ function CareCategoryPageContent() {
                     {currentPage > 1 && (
                       <Link
                         href={`?page=${currentPage - 1}`}
-                        onClick={() => setPageParam(String(currentPage - 1))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         ‹
@@ -462,7 +424,6 @@ function CareCategoryPageContent() {
                         <Link
                           key={page}
                           href={`?page=${page}`}
-                          onClick={() => setPageParam(String(page))}
                           className={[
                             "min-w-[36px] h-9 flex items-center justify-center rounded-full border text-xs md:text-sm transition-all",
                             isActive
@@ -478,7 +439,6 @@ function CareCategoryPageContent() {
                     {currentPage < totalPages && (
                       <Link
                         href={`?page=${currentPage + 1}`}
-                        onClick={() => setPageParam(String(currentPage + 1))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         ›
@@ -488,7 +448,6 @@ function CareCategoryPageContent() {
                     {currentPage < totalPages && (
                       <Link
                         href={`?page=${totalPages}`}
-                        onClick={() => setPageParam(String(totalPages))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         »

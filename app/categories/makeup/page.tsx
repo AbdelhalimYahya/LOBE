@@ -2,7 +2,6 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
 import { authenticatedFetch } from "@/lib/auth";
@@ -100,7 +99,7 @@ function MakeupCategoryPageContent() {
   const [products, setProducts] = useState<MakeupProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const searchParams = useSearchParams();
+  const [pageParam, setPageParam] = useState<string | null>(null);
 
   // ------- حالات الفلاتر -------
   const [searchQuery, setSearchQuery] = useState("");
@@ -108,6 +107,20 @@ function MakeupCategoryPageContent() {
   const [selectedSkinType, setSelectedSkinType] = useState<string>("all");
   const [minRating, setMinRating] = useState<string>("all");
   // -----------------------------
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        setPageParam(new URLSearchParams(window.location.search).get("page"));
+      } catch {
+        setPageParam(null);
+      }
+    };
+
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
 
   // جلب منتجات الميكب + ترتيب اللي عندها صورة أولاً
   useEffect(() => {
@@ -195,7 +208,6 @@ function MakeupCategoryPageContent() {
   const totalProducts = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
 
-  const pageParam = searchParams.get("page");
   let pageNumberRaw = Number(pageParam || "1");
   if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) {
     pageNumberRaw = 1;
@@ -432,6 +444,7 @@ function MakeupCategoryPageContent() {
                     {currentPage > 1 && (
                       <Link
                         href={`?page=1`}
+                        onClick={() => setPageParam("1")}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white/90 backdrop-blur-sm text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         «
@@ -441,6 +454,7 @@ function MakeupCategoryPageContent() {
                     {currentPage > 1 && (
                       <Link
                         href={`?page=${currentPage - 1}`}
+                        onClick={() => setPageParam(String(currentPage - 1))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white/90 backdrop-blur-sm text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         ‹
@@ -467,6 +481,7 @@ function MakeupCategoryPageContent() {
                           <Link
                             key={page}
                             href={`?page=${page}`}
+                            onClick={() => setPageParam(String(page))}
                             className={[
                               "min-w-[36px] h-9 flex items-center justify-center rounded-full border text-xs md:text-sm transition-all",
                               isActive
@@ -483,6 +498,7 @@ function MakeupCategoryPageContent() {
                     {currentPage < totalPages && (
                       <Link
                         href={`?page=${currentPage + 1}`}
+                        onClick={() => setPageParam(String(currentPage + 1))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white/90 backdrop-blur-sm text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         ›
@@ -492,6 +508,7 @@ function MakeupCategoryPageContent() {
                     {currentPage < totalPages && (
                       <Link
                         href={`?page=${totalPages}`}
+                        onClick={() => setPageParam(String(totalPages))}
                         className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white/90 backdrop-blur-sm text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
                       >
                         »

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState, use } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { StaticImageData } from "next/image";
 import { MainNavbar } from "@/components";
@@ -227,16 +227,34 @@ export default function ProductDetailsPage(props: PageProps) {
 
 function ProductDetailsPageContent({ params }: PageProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [preferredCategory, setPreferredCategory] = useState<
+    | "skincare"
+    | "makeup"
+    | "hair"
+    | null
+  >(null);
 
   const resolvedParams = use(params);
   const productId = Number(resolvedParams.id);
 
-  const preferredCategory = searchParams.get("category") as
-    | "skincare"
-    | "makeup"
-    | "hair"
-    | null;
+  useEffect(() => {
+    const read = () => {
+      try {
+        const cat = new URLSearchParams(window.location.search).get("category");
+        if (cat === "skincare" || cat === "makeup" || cat === "hair") {
+          setPreferredCategory(cat);
+          return;
+        }
+        setPreferredCategory(null);
+      } catch {
+        setPreferredCategory(null);
+      }
+    };
+
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
 
   const [product, setProduct] = useState<UnifiedProduct | null>(null);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar } from "@/components";
 import BottomNavbar from "@/components/BottomNavbar";
@@ -85,8 +85,9 @@ export default function ProductsPage() {
 }
 
 function ProductsPageContent() {
-  const searchParams = useSearchParams();
   const router = useRouter();
+
+  const [pageParam, setPageParam] = useState<string | null>(null);
 
   const [skincare, setSkincare] = useState<SkincareProduct[]>([]);
   const [makeup, setMakeup] = useState<MakeupProduct[]>([]);
@@ -96,6 +97,20 @@ function ProductsPageContent() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("all");
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        setPageParam(new URLSearchParams(window.location.search).get("page"));
+      } catch {
+        setPageParam(null);
+      }
+    };
+
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
 
   useEffect(() => {
     async function fetchAllProducts() {
@@ -174,7 +189,6 @@ function ProductsPageContent() {
   const totalProducts = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
 
-  const pageParam = searchParams.get("page");
   let pageNumberRaw = Number(pageParam || "1");
   if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
   const currentPage = Math.min(pageNumberRaw, totalPages);
@@ -188,6 +202,7 @@ function ProductsPageContent() {
   const handleResetFilters = () => {
     setSearchQuery("");
     setSelectedBrand("all");
+    setPageParam(null);
     router.push("/products");
   };
 
@@ -232,6 +247,7 @@ function ProductsPageContent() {
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
+                    setPageParam(null);
                     router.push("/products");
                   }}
                   className="w-full px-3 py-2 border border-natural-light-border rounded-lg text-sm"
@@ -246,6 +262,7 @@ function ProductsPageContent() {
                   value={selectedBrand}
                   onChange={(e) => {
                     setSelectedBrand(e.target.value);
+                    setPageParam(null);
                     router.push("/products");
                   }}
                   className="w-full px-3 py-2 border border-natural-light-border rounded-lg text-sm"
@@ -352,6 +369,7 @@ function ProductsPageContent() {
                           <Link
                             key={pageNum}
                             href={`/products?page=${pageNum}`}
+                            onClick={() => setPageParam(String(pageNum))}
                             className={`px-3 py-1.5 rounded-lg transition ${
                               currentPage === pageNum
                                 ? "bg-brand-primary text-white"

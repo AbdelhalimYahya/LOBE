@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,6 @@ function ResetPasswordPageContent() {
   const [uid, setUid] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const validateResetLink = useCallback(
@@ -55,19 +54,35 @@ function ResetPasswordPageContent() {
   );
 
   useEffect(() => {
-    const uidParam = searchParams.get("uid");
-    const tokenParam = searchParams.get("token");
+    const read = () => {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const uidParam = sp.get("uid");
+        const tokenParam = sp.get("token");
 
-    if (!uidParam || !tokenParam) {
-      setError("رابط إعادة تعيين كلمة المرور غير صحيح أو منتهي الصلاحية");
-      return;
-    }
+        if (!uidParam || !tokenParam) {
+          setError("رابط إعادة تعيين كلمة المرور غير صحيح أو منتهي الصلاحية");
+          setUid(null);
+          setToken(null);
+          return;
+        }
 
-    setUid(uidParam);
-    setToken(tokenParam);
+        setError(null);
+        setUid(uidParam);
+        setToken(tokenParam);
 
-    validateResetLink(uidParam, tokenParam);
-  }, [searchParams, validateResetLink]);
+        validateResetLink(uidParam, tokenParam);
+      } catch {
+        setError("رابط إعادة تعيين كلمة المرور غير صحيح أو منتهي الصلاحية");
+        setUid(null);
+        setToken(null);
+      }
+    };
+
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, [validateResetLink]);
 
   const validatePassword = (pwd: string): string | null => {
     if (pwd.length < 8) {
