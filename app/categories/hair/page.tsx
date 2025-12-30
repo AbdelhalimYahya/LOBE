@@ -1,7 +1,7 @@
 // app/categories/hair/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
@@ -66,6 +66,20 @@ function generatePageNumbers(
 }
 
 export default function HairCategoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
+      <HairCategoryPageContent />
+    </Suspense>
+  );
+}
+
+function HairCategoryPageContent() {
   const [products, setProducts] = useState<HairProduct[]>([]);
   const [loading, setLoading] = useState(true);
 

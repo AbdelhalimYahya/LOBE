@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Rubik } from "next/font/google";
+import type React from "react";
 import "./globals.css";
 
 // Load Rubik font from Google Fonts

@@ -1,7 +1,7 @@
 // app/categories/care/page.tsx
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
@@ -81,6 +81,20 @@ function generatePageNumbers(
 }
 
 export default function CareCategoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
+      <CareCategoryPageContent />
+    </Suspense>
+  );
+}
+
+function CareCategoryPageContent() {
   const [products, setProducts] = useState<SkincareProduct[]>([]);
   const [loading, setLoading] = useState(true);
 

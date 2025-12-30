@@ -1,7 +1,7 @@
 // app/categories/makeup/page.tsx
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
@@ -81,6 +81,20 @@ function generatePageNumbers(
 }
 
 export default function MakeupCategoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
+      <MakeupCategoryPageContent />
+    </Suspense>
+  );
+}
+
+function MakeupCategoryPageContent() {
   const [products, setProducts] = useState<MakeupProduct[]>([]);
   const [loading, setLoading] = useState(true);
 

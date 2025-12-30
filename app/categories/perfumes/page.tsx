@@ -1,6 +1,7 @@
 // app/categories/fragrance/page.tsx
 "use client";
 
+import type React from "react";
 import { useState, useCallback } from "react";
 import { MainNavbar, HomeFooter, PageHeader } from "@/components";
 

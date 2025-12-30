@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { Suspense, useCallback, useEffect, useState, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import type { StaticImageData } from "next/image";
@@ -38,7 +38,7 @@ type SkincareProductApi = {
   avg_rating: number | null;
   reviews_count: number | null;
   brand_name: string | null;
-  affiliate_links?: any; // نخليها any عشان نطبّعها
+  affiliate_links?: unknown; // نخليها unknown عشان نطبّعها
   ingredients?: IngredientApi[];
 };
 
@@ -50,7 +50,7 @@ type MakeupProductApi = {
   avg_rating: number | null;
   reviews_count: number | null;
   brand_name: string | null;
-  affiliate_links?: any;
+  affiliate_links?: unknown;
   ingredients?: IngredientApi[];
 };
 
@@ -63,7 +63,7 @@ type HairProductApi = {
   avg_rating: number | null;
   reviews_count: number | null;
   brand_name: string | null;
-  affiliate_links?: any;
+  affiliate_links?: unknown;
   ingredients?: IngredientApi[];
 };
 
@@ -120,25 +120,34 @@ const normalizeStoreName = (raw: unknown): string => {
   return s || "unknown";
 };
 
-const normalizeAffiliateLinks = (raw: any): AffiliateLink[] => {
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object";
+
+const normalizeAffiliateLinks = (raw: unknown): AffiliateLink[] => {
   // نتوقع raw يكون Array، ولو مو Array نخليه []
-  const arr: any[] = Array.isArray(raw) ? raw : [];
+  const arr: unknown[] = Array.isArray(raw) ? raw : [];
 
   const mapped = arr
     .map((x) => {
+      if (!isRecord(x)) return null;
+
       // بعض الباكند يرجع: {store, marketplace, url}
       // وبعضه يرجع: {tag, marketplace, affiliate_url}
-      const storeRaw = x?.store ?? x?.tag ?? x?.name ?? x?.provider;
-      const urlRaw = x?.url ?? x?.affiliate_url ?? x?.affiliateUrl ?? x?.link;
+      const storeRaw =
+        x["store"] ?? x["tag"] ?? x["name"] ?? x["provider"] ?? null;
+      const urlRaw =
+        x["url"] ?? x["affiliate_url"] ?? x["affiliateUrl"] ?? x["link"] ?? null;
 
       const store = normalizeStoreName(storeRaw);
       const url = typeof urlRaw === "string" ? urlRaw.trim() : "";
 
       if (!url) return null;
 
+      const marketplaceRaw = x["marketplace"] ?? x["mp"] ?? null;
+
       return {
         store,
-        marketplace: x?.marketplace ?? x?.mp ?? null,
+        marketplace: typeof marketplaceRaw === "string" ? marketplaceRaw : null,
         url,
       } as AffiliateLink;
     })
@@ -200,7 +209,21 @@ const getSafetyLabel = (score: number | null): string => {
   return "آمن";
 };
 
-export default function ProductDetailsPage({ params }: PageProps) {
+export default function ProductDetailsPage(props: PageProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
+      <ProductDetailsPageContent {...props} />
+    </Suspense>
+  );
+}
+
+function ProductDetailsPageContent({ params }: PageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -235,7 +258,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
 
   // ========= دالة واحدة تجيب المنتج من كاتيجوري معيّنة =========
 
-  const fetchFromCategory = async (
+  const fetchFromCategory = useCallback(async (
     category: "skincare" | "makeup" | "hair"
   ): Promise<{ product: UnifiedProduct; ingredients: Ingredient[] } | null> => {
     const pathSegment = category === "hair" ? "haircare" : category;
@@ -247,10 +270,11 @@ export default function ProductDetailsPage({ params }: PageProps) {
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`خطأ في جلب بيانات ${category}: ${res.status}`);
 
-    const data: any = await res.json();
+    const data: unknown = await res.json();
+    const dataObj = isRecord(data) ? data : {};
 
     const affiliateLinks = normalizeAffiliateLinks(
-      data?.affiliate_links ?? data?.affiliateLinks ?? data?.links ?? []
+      dataObj["affiliate_links"] ?? dataObj["affiliateLinks"] ?? dataObj["links"] ?? []
     );
 
     if (category === "skincare") {
@@ -327,7 +351,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
     }));
 
     return { product: unified, ingredients: mappedIngredients };
-  };
+  }, [productId]);
 
   // ========= جلب المنتج =========
 
@@ -386,16 +410,18 @@ export default function ProductDetailsPage({ params }: PageProps) {
             setIsFavorite(false);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err);
-        setError(err.message || "حدث خطأ أثناء تحميل بيانات المنتج.");
+        setError(
+          err instanceof Error ? err.message : "حدث خطأ أثناء تحميل بيانات المنتج."
+        );
       } finally {
         setLoading(false);
       }
     };
 
     loadProduct();
-  }, [productId, preferredCategory]);
+  }, [productId, preferredCategory, fetchFromCategory]);
 
   // ========= مفضلة =========
 

@@ -1,10 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import type React from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Icon from "@/components/Icon";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
+      <ResetPasswordPageContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordPageContent() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -15,6 +30,27 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  const validateResetLink = useCallback(
+    async (uidParam: string, tokenParam: string) => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/password/reset/confirm/${uidParam}/${tokenParam}/`,
+          {
+            method: "GET",
+          }
+        );
+
+        if (!response.ok) {
+          setError("رابط إعادة تعيين كلمة المرور غير صحيح أو منتهي الصلاحية");
+        }
+      } catch (err) {
+        console.error(err);
+        setError("حدث خطأ في التحقق من الرابط");
+      }
+    },
+    [API_BASE_URL]
+  );
 
   useEffect(() => {
     const uidParam = searchParams.get("uid");
@@ -29,25 +65,7 @@ export default function ResetPasswordPage() {
     setToken(tokenParam);
 
     validateResetLink(uidParam, tokenParam);
-  }, [searchParams]);
-
-  const validateResetLink = async (uidParam: string, tokenParam: string) => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/auth/password/reset/confirm/${uidParam}/${tokenParam}/`,
-        {
-          method: "GET",
-        }
-      );
-
-      if (!response.ok) {
-        setError("رابط إعادة تعيين كلمة المرور غير صحيح أو منتهي الصلاحية");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("حدث خطأ في التحقق من الرابط");
-    }
-  };
+  }, [searchParams, validateResetLink]);
 
   const validatePassword = (pwd: string): string | null => {
     if (pwd.length < 8) {
