@@ -11,6 +11,8 @@ import BottomNavbar from "@/components/BottomNavbar";
 import { ChevronRight } from "lucide-react";
 import { authenticatedFetch } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // ========= أنواع الداتا من الـ API =========

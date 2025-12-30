@@ -7,6 +7,8 @@ import { HomeFooter, MainNavbar } from "@/components";
 import BottomNavbar from "@/components/BottomNavbar";
 import { authenticatedFetch } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 type SkincareProduct = {
   skincare_id: number;
   name: string;

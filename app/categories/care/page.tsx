@@ -7,6 +7,8 @@ import Link from "next/link";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
 import { authenticatedFetch } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 type SkincareProduct = {
   skincare_id: number;
   name: string;
