@@ -37,6 +37,14 @@ type AllProducts = SkincareProduct | MakeupProduct | HaircareProduct;
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
 
+type PaginatedPayload<T> = {
+  results: T[];
+  next: string | null;
+  previous?: string | null;
+  count?: number;
+  max_pages?: number;
+};
+
 function extractList<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
 
@@ -50,6 +58,60 @@ function extractList<T>(payload: unknown): T[] {
   }
 
   return [];
+}
+
+function extractPaginated<T>(payload: unknown): PaginatedPayload<T> | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const obj = payload as Record<string, unknown>;
+  if (!Array.isArray(obj.results)) return null;
+
+  const next =
+    typeof obj.next === "string" ? obj.next : obj.next === null ? null : null;
+
+  return {
+    results: obj.results as T[],
+    next,
+    previous:
+      typeof obj.previous === "string"
+        ? obj.previous
+        : obj.previous === null
+        ? null
+        : undefined,
+    count: typeof obj.count === "number" ? obj.count : undefined,
+    max_pages: typeof obj.max_pages === "number" ? obj.max_pages : undefined,
+  };
+}
+
+async function fetchPaginatedOnce<T>(
+  url: string
+): Promise<{ items: T[]; next: string | null; count?: number; maxPages?: number }> {
+  const res = await authenticatedFetch(url);
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 404) {
+      const data = await res.json().catch(() => null);
+      console.warn("Pagination invalid page:", url, data);
+      return { items: [], next: null };
+    }
+
+    const data = await res.json().catch(() => null);
+    console.error("Pagination fetch failed:", url, data);
+    throw new Error("فشل في تحميل المنتجات");
+  }
+
+  const data = (await res.json().catch(() => null)) as unknown;
+  const paginated = extractPaginated<T>(data);
+
+  if (paginated) {
+    return {
+      items: paginated.results,
+      next: paginated.next,
+      count: paginated.count,
+      maxPages: paginated.max_pages,
+    };
+  }
+
+  return { items: extractList<T>(data), next: null };
 }
 
 function generatePageNumbers(
@@ -87,16 +149,75 @@ export default function ProductsPage() {
 function ProductsPageContent() {
   const router = useRouter();
 
-  const [pageParam, setPageParam] = useState<string | null>(null);
+  const [pageParam, setPageParam] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return new URLSearchParams(window.location.search).get("page");
+    } catch {
+      return null;
+    }
+  });
 
   const [skincare, setSkincare] = useState<SkincareProduct[]>([]);
   const [makeup, setMakeup] = useState<MakeupProduct[]>([]);
   const [haircare, setHaircare] = useState<HaircareProduct[]>([]);
+
+  const [serverTotalPages, setServerTotalPages] = useState<number>(1);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("all");
+
+  useEffect(() => {
+    let cancelled = false;
+    const shouldAbort = () => cancelled;
+
+    const fetchMeta = async () => {
+      try {
+        const backendPageSize = 12;
+        const skincareMetaUrl = `${API_BASE}/v1/skincare/skincare_products/?page=1&size=${backendPageSize}`;
+        const makeupMetaUrl = `${API_BASE}/v1/makeup/makeup_products/?page=1&size=${backendPageSize}`;
+        const haircareMetaUrl = `${API_BASE}/v1/haircare/haircare_products/?page=1&size=${backendPageSize}`;
+
+        const [skincareMeta, makeupMeta, haircareMeta] = await Promise.all([
+          fetchPaginatedOnce<SkincareProduct>(skincareMetaUrl),
+          fetchPaginatedOnce<MakeupProduct>(makeupMetaUrl),
+          fetchPaginatedOnce<HaircareProduct>(haircareMetaUrl),
+        ]);
+
+        if (shouldAbort()) return;
+
+        const pagesFrom = (meta: {
+          count?: number;
+          maxPages?: number;
+        }): number | null => {
+          if (typeof meta.maxPages === "number" && meta.maxPages > 0) return meta.maxPages;
+          if (typeof meta.count === "number") {
+            return Math.max(1, Math.ceil(meta.count / backendPageSize));
+          }
+          return null;
+        };
+
+        const skincarePages = pagesFrom(skincareMeta);
+        const makeupPages = pagesFrom(makeupMeta);
+        const haircarePages = pagesFrom(haircareMeta);
+
+        setServerTotalPages(
+          Math.max(1, skincarePages ?? 1, makeupPages ?? 1, haircarePages ?? 1)
+        );
+      } catch (err) {
+        console.error("Failed to fetch pagination meta:", err);
+      }
+    };
+
+    void fetchMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const read = () => {
@@ -107,54 +228,59 @@ function ProductsPageContent() {
       }
     };
 
-    read();
     window.addEventListener("popstate", read);
     return () => window.removeEventListener("popstate", read);
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const shouldAbort = () => cancelled;
+
+    let pageNumberRaw = Number(pageParam || "1");
+    if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
+    const requestedPage = pageNumberRaw;
+
     async function fetchAllProducts() {
       setLoading(true);
       setError(null);
       try {
-        const [skincareRes, makeupRes, haircareRes] = await Promise.all([
-          authenticatedFetch(`${API_BASE}/v1/skincare/skincare_products/`),
-          authenticatedFetch(`${API_BASE}/v1/makeup/makeup_products/`),
-          authenticatedFetch(`${API_BASE}/v1/haircare/haircare_products/`),
+        const backendPageSize = 12;
+        const skincareUrl = `${API_BASE}/v1/skincare/skincare_products/?page=${requestedPage}&size=${backendPageSize}`;
+        const makeupUrl = `${API_BASE}/v1/makeup/makeup_products/?page=${requestedPage}&size=${backendPageSize}`;
+        const haircareUrl = `${API_BASE}/v1/haircare/haircare_products/?page=${requestedPage}&size=${backendPageSize}`;
+
+        const [skincareFirst, makeupFirst, haircareFirst] = await Promise.all([
+          fetchPaginatedOnce<SkincareProduct>(skincareUrl),
+          fetchPaginatedOnce<MakeupProduct>(makeupUrl),
+          fetchPaginatedOnce<HaircareProduct>(haircareUrl),
         ]);
 
-        if (!skincareRes.ok || !makeupRes.ok || !haircareRes.ok) {
-          const errorData = await Promise.all([
-            skincareRes.json().catch(() => ({})),
-            makeupRes.json().catch(() => ({})),
-            haircareRes.json().catch(() => ({})),
-          ]);
-          console.error("Product fetch errors:", errorData);
-          throw new Error("فشل في تحميل المنتجات");
-        }
+        if (shouldAbort()) return;
 
-        const skincareData = await skincareRes.json();
-        const makeupData = await makeupRes.json();
-        const haircareData = await haircareRes.json();
-
-        setSkincare(extractList<SkincareProduct>(skincareData));
-        setMakeup(extractList<MakeupProduct>(makeupData));
-        setHaircare(extractList<HaircareProduct>(haircareData));
+        setSkincare(skincareFirst.items);
+        setMakeup(makeupFirst.items);
+        setHaircare(haircareFirst.items);
       } catch (err) {
         console.error("خطأ في جلب المنتجات:", err);
-        setError("فشل تحميل المنتجات. حاول مرة أخرى.");
+        if (!shouldAbort()) setError("فشل تحميل المنتجات. حاول مرة أخرى.");
       } finally {
-        setLoading(false);
+        if (!shouldAbort()) setLoading(false);
       }
     }
 
-    fetchAllProducts();
-  }, []);
+    void fetchAllProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pageParam]);
 
   const allProducts: AllProducts[] = useMemo(
     () => [...skincare, ...makeup, ...haircare],
     [skincare, makeup, haircare]
   );
+
+  const isInitialLoading = loading && allProducts.length === 0;
 
   const brandOptions = useMemo(
     () =>
@@ -185,19 +311,13 @@ function ProductsPageContent() {
     });
   }, [allProducts, searchQuery, selectedBrand]);
 
-  const pageSize = 12;
-  const totalProducts = filteredProducts.length;
-  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
+  const displayedProducts = filteredProducts;
 
   let pageNumberRaw = Number(pageParam || "1");
   if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
-  const currentPage = Math.min(pageNumberRaw, totalPages);
+  const currentPage = Math.min(pageNumberRaw, serverTotalPages);
 
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedProducts = filteredProducts.slice(
-    startIndex,
-    startIndex + pageSize
-  );
+  const totalPages = serverTotalPages;
 
   const handleResetFilters = () => {
     setSearchQuery("");
@@ -288,21 +408,21 @@ function ProductsPageContent() {
 
           {/* المنتجات */}
           <section className="flex-1 flex flex-col gap-6">
-            {loading ? (
+            {isInitialLoading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-12 h-12 rounded-lg animate-pulse bg-pink-300" />
                   <p className="text-natural-helper-text">جاري تحميل المنتجات...</p>
                 </div>
               </div>
-            ) : paginatedProducts.length === 0 ? (
+            ) : displayedProducts.length === 0 ? (
               <div className="flex items-center justify-center py-20">
                 <p className="text-natural-helper-text">لا توجد منتجات تطابق البحث</p>
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
-                  {paginatedProducts.map((product) => {
+                  {displayedProducts.map((product) => {
                     const category =
                       "skincare_id" in product
                         ? "skincare"
