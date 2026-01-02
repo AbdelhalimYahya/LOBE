@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HomeFooter, MainNavbar } from "@/components";
@@ -45,6 +45,11 @@ type PaginatedPayload<T> = {
   max_pages?: number;
 };
 
+type BrandOption = {
+  label: string;
+  value: number;
+};
+
 function extractList<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
 
@@ -76,17 +81,18 @@ function extractPaginated<T>(payload: unknown): PaginatedPayload<T> | null {
       typeof obj.previous === "string"
         ? obj.previous
         : obj.previous === null
-        ? null
-        : undefined,
+          ? null
+          : undefined,
     count: typeof obj.count === "number" ? obj.count : undefined,
     max_pages: typeof obj.max_pages === "number" ? obj.max_pages : undefined,
   };
 }
 
 async function fetchPaginatedOnce<T>(
-  url: string
+  url: string,
+  signal?: AbortSignal
 ): Promise<{ items: T[]; next: string | null; count?: number; maxPages?: number }> {
-  const res = await authenticatedFetch(url);
+  const res = await authenticatedFetch(url, signal ? { signal } : {});
   if (!res.ok) {
     if (res.status === 400 || res.status === 404) {
       const data = await res.json().catch(() => null);
@@ -164,30 +170,130 @@ function ProductsPageContent() {
 
   const [serverTotalPages, setServerTotalPages] = useState<number>(1);
 
+  const pageCacheRef = useRef(
+    new Map<
+      number,
+      {
+        skincare: SkincareProduct[];
+        makeup: MakeupProduct[];
+        haircare: HaircareProduct[];
+        totalPages: number;
+        cachedAt: number;
+      }
+    >()
+  );
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
+  // Initialize search from URL on mount
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return new URLSearchParams(window.location.search).get("search") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [activeSearchQuery, setActiveSearchQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return new URLSearchParams(window.location.search).get("search") || "";
+    } catch {
+      return "";
+    }
+  });
   const [selectedBrand, setSelectedBrand] = useState("all");
+  const [brandsList, setBrandsList] = useState<BrandOption[]>([]);
+  const [hiddenProducts, setHiddenProducts] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        setPageParam(params.get("page"));
+        const searchParam = params.get("search") || "";
+        setSearchQuery(searchParam);
+        setActiveSearchQuery(searchParam);
+      } catch {
+        setPageParam(null);
+      }
+    };
+
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+
+  // Fetch brands on mount
+  useEffect(() => {
+    async function fetchBrands() {
+      try {
+        const res = await authenticatedFetch(`${API_BASE}/v1/skincare/select_brands/`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.results)) {
+            setBrandsList(data.results);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch brands", err);
+      }
+    }
+    fetchBrands();
+  }, []);
+
+
 
   useEffect(() => {
     let cancelled = false;
     const shouldAbort = () => cancelled;
 
-    const fetchMeta = async () => {
+    const controller = new AbortController();
+
+    let pageNumberRaw = Number(pageParam || "1");
+    if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
+    const requestedPage = pageNumberRaw;
+
+    const cacheKey = `${requestedPage}-${activeSearchQuery}-${selectedBrand}`;
+    const cached = pageCacheRef.current.get(requestedPage);
+    if (cached && Date.now() - cached.cachedAt < 5 * 60 * 1000 && activeSearchQuery === "" && selectedBrand === "all") {
+      setError(null);
+      setSkincare(cached.skincare);
+      setMakeup(cached.makeup);
+      setHaircare(cached.haircare);
+      setServerTotalPages((prev) => Math.max(prev, cached.totalPages));
+      setLoading(false);
+      return () => {
+        cancelled = true;
+        controller.abort();
+      };
+    }
+
+    async function fetchAllProducts() {
+      setLoading(true);
+      setError(null);
       try {
         const backendPageSize = 12;
-        const skincareMetaUrl = `${API_BASE}/v1/skincare/skincare_products/?page=1&size=${backendPageSize}`;
-        const makeupMetaUrl = `${API_BASE}/v1/makeup/makeup_products/?page=1&size=${backendPageSize}`;
-        const haircareMetaUrl = `${API_BASE}/v1/haircare/haircare_products/?page=1&size=${backendPageSize}`;
+        const searchParam = activeSearchQuery.trim()
+          ? `&search=${encodeURIComponent(activeSearchQuery.trim())}`
+          : "";
+        const brandParam = selectedBrand !== "all" ? `&brand=${selectedBrand}` : "";
 
-        const [skincareMeta, makeupMeta, haircareMeta] = await Promise.all([
-          fetchPaginatedOnce<SkincareProduct>(skincareMetaUrl),
-          fetchPaginatedOnce<MakeupProduct>(makeupMetaUrl),
-          fetchPaginatedOnce<HaircareProduct>(haircareMetaUrl),
+        const skincareUrl = `${API_BASE}/v1/skincare/skincare_products/?page=${requestedPage}&size=${backendPageSize}${searchParam}${brandParam}`;
+        const makeupUrl = `${API_BASE}/v1/makeup/makeup_products/?page=${requestedPage}&size=${backendPageSize}${searchParam}${brandParam}`;
+        const haircareUrl = `${API_BASE}/v1/haircare/haircare_products/?page=${requestedPage}&size=${backendPageSize}${searchParam}${brandParam}`;
+
+        const [skincareFirst, makeupFirst, haircareFirst] = await Promise.all([
+          fetchPaginatedOnce<SkincareProduct>(skincareUrl, controller.signal),
+          fetchPaginatedOnce<MakeupProduct>(makeupUrl, controller.signal),
+          fetchPaginatedOnce<HaircareProduct>(haircareUrl, controller.signal),
         ]);
 
         if (shouldAbort()) return;
+
+        setSkincare(skincareFirst.items);
+        setMakeup(makeupFirst.items);
+        setHaircare(haircareFirst.items);
 
         const pagesFrom = (meta: {
           count?: number;
@@ -200,67 +306,32 @@ function ProductsPageContent() {
           return null;
         };
 
-        const skincarePages = pagesFrom(skincareMeta);
-        const makeupPages = pagesFrom(makeupMeta);
-        const haircarePages = pagesFrom(haircareMeta);
-
-        setServerTotalPages(
-          Math.max(1, skincarePages ?? 1, makeupPages ?? 1, haircarePages ?? 1)
+        const totalPages = Math.max(
+          1,
+          pagesFrom(skincareFirst) ?? 1,
+          pagesFrom(makeupFirst) ?? 1,
+          pagesFrom(haircareFirst) ?? 1
         );
+        // Reset total pages when search changes to show correct pagination
+        setServerTotalPages(totalPages);
+
+        // Only cache if no search query and no brand filter
+        if (activeSearchQuery === "" && selectedBrand === "all") {
+          pageCacheRef.current.set(requestedPage, {
+            skincare: skincareFirst.items,
+            makeup: makeupFirst.items,
+            haircare: haircareFirst.items,
+            totalPages,
+            cachedAt: Date.now(),
+          });
+        }
       } catch (err) {
-        console.error("Failed to fetch pagination meta:", err);
-      }
-    };
-
-    void fetchMeta();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const read = () => {
-      try {
-        setPageParam(new URLSearchParams(window.location.search).get("page"));
-      } catch {
-        setPageParam(null);
-      }
-    };
-
-    window.addEventListener("popstate", read);
-    return () => window.removeEventListener("popstate", read);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const shouldAbort = () => cancelled;
-
-    let pageNumberRaw = Number(pageParam || "1");
-    if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
-    const requestedPage = pageNumberRaw;
-
-    async function fetchAllProducts() {
-      setLoading(true);
-      setError(null);
-      try {
-        const backendPageSize = 12;
-        const skincareUrl = `${API_BASE}/v1/skincare/skincare_products/?page=${requestedPage}&size=${backendPageSize}`;
-        const makeupUrl = `${API_BASE}/v1/makeup/makeup_products/?page=${requestedPage}&size=${backendPageSize}`;
-        const haircareUrl = `${API_BASE}/v1/haircare/haircare_products/?page=${requestedPage}&size=${backendPageSize}`;
-
-        const [skincareFirst, makeupFirst, haircareFirst] = await Promise.all([
-          fetchPaginatedOnce<SkincareProduct>(skincareUrl),
-          fetchPaginatedOnce<MakeupProduct>(makeupUrl),
-          fetchPaginatedOnce<HaircareProduct>(haircareUrl),
-        ]);
-
-        if (shouldAbort()) return;
-
-        setSkincare(skincareFirst.items);
-        setMakeup(makeupFirst.items);
-        setHaircare(haircareFirst.items);
-      } catch (err) {
+        if (
+          controller.signal.aborted ||
+          (err instanceof DOMException && err.name === "AbortError")
+        ) {
+          return;
+        }
         console.error("خطأ في جلب المنتجات:", err);
         if (!shouldAbort()) setError("فشل تحميل المنتجات. حاول مرة أخرى.");
       } finally {
@@ -272,8 +343,9 @@ function ProductsPageContent() {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [pageParam]);
+  }, [pageParam, activeSearchQuery, selectedBrand]);
 
   const allProducts: AllProducts[] = useMemo(
     () => [...skincare, ...makeup, ...haircare],
@@ -282,45 +354,16 @@ function ProductsPageContent() {
 
   const isInitialLoading = loading && allProducts.length === 0;
 
-  const brandOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          allProducts
-            .map((p) => p.brand_name)
-            .filter((b): b is string => !!b && b.trim().length > 0)
-        )
-      ),
-    [allProducts]
-  );
-
-  const filteredProducts = useMemo(() => {
-    return allProducts.filter((product) => {
-      if (
-        searchQuery.trim() &&
-        !product.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ) {
-        return false;
-      }
-
-      if (selectedBrand !== "all" && product.brand_name !== selectedBrand) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [allProducts, searchQuery, selectedBrand]);
-
+  /* Removed client filtering to rely on backend */
+  const filteredProducts = allProducts;
   const displayedProducts = filteredProducts;
 
-  let pageNumberRaw = Number(pageParam || "1");
-  if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
-  const currentPage = Math.min(pageNumberRaw, serverTotalPages);
-
   const totalPages = serverTotalPages;
+  const currentPage = Number(pageParam || "1");
 
   const handleResetFilters = () => {
     setSearchQuery("");
+    setActiveSearchQuery("");
     setSelectedBrand("all");
     setPageParam(null);
     router.push("/products");
@@ -340,11 +383,29 @@ function ProductsPageContent() {
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 md:py-10">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-natural-primary-text mb-4">
-            جميع المنتجات
+            {activeSearchQuery ? `نتائج البحث عن: "${activeSearchQuery}"` : "جميع المنتجات"}
           </h1>
           <p className="text-natural-helper-text">
-            اكتشف مجموعتنا الكاملة من منتجات الجمال والعناية
+            {activeSearchQuery
+              ? `عرض المنتجات المطابقة لبحثك`
+              : "اكتشف مجموعتنا الكاملة من منتجات الجمال والعناية"}
           </p>
+          {activeSearchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setActiveSearchQuery("");
+                setPageParam(null);
+                router.push("/products");
+              }}
+              className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-pink-100 text-pink-700 rounded-lg text-sm font-medium hover:bg-pink-200 transition"
+            >
+              <span>مسح البحث</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {error && (
@@ -361,17 +422,36 @@ function ProductsPageContent() {
                 <label className="block text-sm font-semibold text-natural-primary-text mb-2">
                   البحث
                 </label>
-                <input
-                  type="text"
-                  placeholder="ابحث عن منتج..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setPageParam(null);
-                    router.push("/products");
-                  }}
-                  className="w-full px-3 py-2 border border-natural-light-border rounded-lg text-sm"
-                />
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    placeholder="ابحث عن منتج..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setActiveSearchQuery(searchQuery);
+                        setPageParam("1");
+                        const searchParam = searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : "";
+                        router.push(`/products?page=1${searchParam}`);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-natural-light-border rounded-lg text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSearchQuery(searchQuery);
+                      setPageParam("1");
+                      const searchParam = searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : "";
+                      router.push(`/products?page=1${searchParam}`);
+                    }}
+                    className="w-full px-4 py-2 bg-brand-primary text-white rounded-lg text-sm font-medium hover:bg-pink-600 transition"
+                  >
+                    بحث
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -382,15 +462,16 @@ function ProductsPageContent() {
                   value={selectedBrand}
                   onChange={(e) => {
                     setSelectedBrand(e.target.value);
-                    setPageParam(null);
-                    router.push("/products");
+                    setPageParam("1");
+                    const searchParam = activeSearchQuery ? `&search=${encodeURIComponent(activeSearchQuery)}` : "";
+                    router.push(`/products?page=1${searchParam}`);
                   }}
                   className="w-full px-3 py-2 border border-natural-light-border rounded-lg text-sm"
                 >
                   <option value="all">الكل</option>
-                  {brandOptions.map((brand) => (
-                    <option key={brand} value={brand}>
-                      {brand}
+                  {brandsList.map((brand) => (
+                    <option key={brand.value} value={brand.value}>
+                      {brand.label}
                     </option>
                   ))}
                 </select>
@@ -427,13 +508,15 @@ function ProductsPageContent() {
                       "skincare_id" in product
                         ? "skincare"
                         : "makeup_id" in product
-                        ? "makeup"
-                        : "haircare";
+                          ? "makeup"
+                          : "haircare";
                     const id =
                       ("skincare_id" in product && product.skincare_id) ||
                       ("makeup_id" in product && product.makeup_id) ||
                       ("haircare_id" in product && product.haircare_id) ||
                       0;
+
+                    if (hiddenProducts.has(`${category}-${id}`)) return null;
 
                     return (
                       <Link
@@ -446,7 +529,16 @@ function ProductsPageContent() {
                             <img
                               src={product.image_url}
                               alt={product.name}
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-contain p-3"
+                              onError={(e) => {
+                                setHiddenProducts(prev => {
+                                  const newSet = new Set(prev);
+                                  newSet.add(`${category}-${id}`);
+                                  return newSet;
+                                });
+                              }}
                             />
                           ) : (
                             <div className="w-full h-full bg-gray-100" />
@@ -488,13 +580,12 @@ function ProductsPageContent() {
                         ) : (
                           <Link
                             key={pageNum}
-                            href={`/products?page=${pageNum}`}
+                            href={`/products?page=${pageNum}${activeSearchQuery ? `&search=${encodeURIComponent(activeSearchQuery)}` : ""}`}
                             onClick={() => setPageParam(String(pageNum))}
-                            className={`px-3 py-1.5 rounded-lg transition ${
-                              currentPage === pageNum
-                                ? "bg-brand-primary text-white"
-                                : "border border-pink-200 text-pink-600 hover:bg-pink-50"
-                            }`}
+                            className={`px-3 py-1.5 rounded-lg transition ${currentPage === pageNum
+                              ? "bg-brand-primary text-white"
+                              : "border border-pink-200 text-pink-600 hover:bg-pink-50"
+                              }`}
                           >
                             {pageNum}
                           </Link>

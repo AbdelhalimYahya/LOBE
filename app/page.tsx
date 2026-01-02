@@ -1,7 +1,7 @@
 "use client";
 import { HomeFooter, MainNavbar } from "@/components";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/Icon";
 import Link from "next/link";
 import Image from "next/image";
@@ -21,12 +21,39 @@ import { ChevronLeft } from "lucide-react";
 import HeroBanner1 from "@/components/home/HeroBanner1";
 import HeroBanner2 from "@/components/home/HeroBanner2";
 import BottomNavbar from "@/components/BottomNavbar";
+import { authenticatedFetch } from "@/lib/auth";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+
+type SearchSuggestion = {
+  id: number;
+  name: string;
+  category: "skincare" | "makeup" | "haircare";
+  image_url?: string | null;
+};
+
+type Product = {
+  id: number;
+  name: string;
+  brand_name: string | null;
+  image_url: string | null;
+  safety_score: number | null;
+  category: "skincare" | "makeup" | "haircare";
+};
 
 const Home = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDropdownRef = useRef<HTMLDivElement | null>(null);
+
   const [activeBanner, setActiveBanner] = useState(0);
   const [isLogin, setIsLogin] = useState(false);
   const [userName, setUserName] = useState("");
+
+  const [mostSearchedProducts, setMostSearchedProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
 
   // Check login status and auto-switch between banners
   useEffect(() => {
@@ -58,6 +85,167 @@ const Home = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch most searched products on mount
+  useEffect(() => {
+    async function fetchMostSearchedProducts() {
+      try {
+        setProductsLoading(true);
+
+        // Just fetch first 4 products from skincare using authenticated fetch
+        const res = await authenticatedFetch(`${API_BASE}/v1/skincare/skincare_products/?page=1&size=4`);
+
+        if (!res.ok) {
+          console.error("Failed to fetch products:", res.status, res.statusText);
+          setProductsLoading(false);
+          return;
+        }
+
+        const data = await res.json();
+
+        console.log("Products data:", data); // Debug log
+
+        const products: Product[] = [];
+
+        if (data.results && Array.isArray(data.results)) {
+          data.results.forEach((p: any) => {
+            products.push({
+              id: p.skincare_id,
+              name: p.name,
+              brand_name: p.brand_name,
+              image_url: p.image_url,
+              safety_score: p.safety_score,
+              category: "skincare",
+            });
+          });
+        }
+
+        console.log("Mapped products:", products); // Debug log
+        setMostSearchedProducts(products);
+      } catch (error) {
+        console.error("Failed to fetch products:", error);
+      } finally {
+        setProductsLoading(false);
+      }
+    }
+
+    fetchMostSearchedProducts();
+  }, []);
+
+  // Search suggestions effect
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        console.log("Searching for:", q); // Debug log
+
+        const [skincareRes, makeupRes, haircareRes] = await Promise.all([
+          authenticatedFetch(`${API_BASE}/v1/skincare/skincare_products/?page=1&size=10&search=${encodeURIComponent(q)}`, { signal: controller.signal }),
+          authenticatedFetch(`${API_BASE}/v1/makeup/makeup_products/?page=1&size=10&search=${encodeURIComponent(q)}`, { signal: controller.signal }),
+          authenticatedFetch(`${API_BASE}/v1/haircare/haircare_products/?page=1&size=10&search=${encodeURIComponent(q)}`, { signal: controller.signal }),
+        ]);
+
+        const [skincareData, makeupData, haircareData] = await Promise.all([
+          skincareRes.json(),
+          makeupRes.json(),
+          haircareRes.json(),
+        ]);
+
+        console.log("Search results:", { skincareData, makeupData, haircareData }); // Debug log
+
+        const suggestions: SearchSuggestion[] = [];
+
+        if (skincareData.results && Array.isArray(skincareData.results)) {
+          skincareData.results.forEach((p: any) => {
+            if (suggestions.length < 10) {
+              suggestions.push({
+                id: p.skincare_id,
+                name: p.name,
+                category: "skincare",
+                image_url: p.image_url,
+              });
+            }
+          });
+        }
+
+        if (makeupData.results && Array.isArray(makeupData.results)) {
+          makeupData.results.forEach((p: any) => {
+            if (suggestions.length < 10) {
+              suggestions.push({
+                id: p.makeup_id,
+                name: p.name,
+                category: "makeup",
+                image_url: p.image_url,
+              });
+            }
+          });
+        }
+
+        if (haircareData.results && Array.isArray(haircareData.results)) {
+          haircareData.results.forEach((p: any) => {
+            if (suggestions.length < 10) {
+              suggestions.push({
+                id: p.haircare_id,
+                name: p.name,
+                category: "haircare",
+                image_url: p.image_url,
+              });
+            }
+          });
+        }
+
+        console.log("Final suggestions:", suggestions); // Debug log
+        setSearchSuggestions(suggestions.slice(0, 10));
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Search failed:", error);
+        setSearchSuggestions([]);
+      } finally {
+        if (!controller.signal.aborted) setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node)) {
+        setSearchDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case "skincare": return "العناية";
+      case "makeup": return "ميكب";
+      case "haircare": return "شعر";
+      default: return category;
+    }
+  };
+
+  const getSafetyColorClass = (score: number | null): string => {
+    if (score === null) return "bg-gray-300";
+    if (score <= 2) return "bg-green-500";
+    if (score <= 3) return "bg-yellow-500";
+    return "bg-red-500";
+  };
+
   const categories = [
     {
       name: "العناية",
@@ -82,45 +270,6 @@ const Home = () => {
       icon: WineIcon,
       category: "commerce",
       href: "/categories/perfumes",
-    },
-  ];
-
-  const mostSearchedProducts = [
-    {
-      id: 1,
-      name: "اسم المنتج",
-      company: "الشركة",
-      image: productImage1,
-      rating: 1,
-      badge: "1",
-      badgeColor: "bg-status-success",
-    },
-    {
-      id: 2,
-      name: "اسم المنتج",
-      company: "الشركة",
-      image: productImage2,
-      rating: 5,
-      badge: "5",
-      badgeColor: "bg-status-warning",
-    },
-    {
-      id: 3,
-      name: "اسم المنتج",
-      company: "الشركة",
-      image: productImage1,
-      rating: 1,
-      badge: "1",
-      badgeColor: "bg-status-success",
-    },
-    {
-      id: 4,
-      name: "اسم المنتج",
-      company: "الشركة",
-      image: productImage2,
-      rating: 5,
-      badge: "5",
-      badgeColor: "bg-status-warning",
     },
   ];
 
@@ -155,9 +304,8 @@ const Home = () => {
     <div className="flex min-h-screen flex-col bg-natural-white" dir="rtl">
       {/* Mobile Header - Visible on mobile only */}
       <nav
-        className={`flex w-full items-center ${
-          isLogin ? "justify-center pt-8" : "justify-between"
-        } px-4 py-3 md:hidden flex-shrink-0`}
+        className={`flex w-full items-center ${isLogin ? "justify-center pt-8" : "justify-between"
+          } px-4 py-3 md:hidden flex-shrink-0`}
       >
         {/* Logo - Right side in RTL */}
         <Link href="/" className="flex items-center">
@@ -223,27 +371,25 @@ const Home = () => {
         {/* Hero Banner Section with Auto-Switch */}
         <div className="relative mb-4 md:mb-6" style={{ minHeight: "200px" }}>
           <div
-            className={`transition-opacity duration-1000 ease-in-out ${
-              activeBanner === 0
-                ? "opacity-100 relative"
-                : "opacity-0 absolute inset-0 pointer-events-none"
-            }`}
+            className={`transition-opacity duration-1000 ease-in-out ${activeBanner === 0
+              ? "opacity-100 relative"
+              : "opacity-0 absolute inset-0 pointer-events-none"
+              }`}
           >
             <HeroBanner1 />
           </div>
           <div
-            className={`transition-opacity duration-1000 ease-in-out ${
-              activeBanner === 1
-                ? "opacity-100 relative"
-                : "opacity-0 absolute inset-0 pointer-events-none"
-            }`}
+            className={`transition-opacity duration-1000 ease-in-out ${activeBanner === 1
+              ? "opacity-100 relative"
+              : "opacity-0 absolute inset-0 pointer-events-none"
+              }`}
           >
             <HeroBanner2 />
           </div>
         </div>
         {/* Search Bar Section */}
         <section className="mb-8 lg:mb-12">
-          <div className="relative w-full">
+          <div className="relative w-full" ref={searchDropdownRef}>
             {/* Gradient Border Wrapper */}
             <div
               className="w-full rounded-full p-[1px]"
@@ -255,10 +401,12 @@ const Home = () => {
               <div className="flex items-center bg-white rounded-full overflow-hidden pl-2 md:pl-2.5">
                 {/* Input Field */}
                 <input
+                  id="home-search-input"
                   type="text"
                   placeholder="ابحث باسم المنتج"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setSearchDropdownOpen(true)}
                   className="flex-1 bg-transparent border-0 outline-none px-4 sm:px-6 md:px-8 text-sm sm:text-base md:text-lg text-natural-primary-text placeholder:text-natural-input-hint h-14 md:h-16"
                   dir="rtl"
                 />
@@ -288,6 +436,41 @@ const Home = () => {
                 </button>
               </div>
             </div>
+
+            {/* Search Dropdown */}
+            {searchDropdownOpen && searchQuery.trim().length >= 2 && (
+              <div className="absolute z-50 mt-2 w-full rounded-2xl border border-natural-light-border bg-white shadow-xl overflow-hidden max-h-96">
+                {searchLoading ? (
+                  <div className="p-4 text-center text-natural-helper-text">
+                    جاري البحث...
+                  </div>
+                ) : searchSuggestions.length === 0 ? (
+                  <div className="p-4 text-center text-natural-helper-text">
+                    لا توجد نتائج
+                  </div>
+                ) : (
+                  <div className="max-h-96 overflow-auto">
+                    {searchSuggestions.map((suggestion) => (
+                      <Link
+                        key={`${suggestion.category}-${suggestion.id}`}
+                        href={`/products/${suggestion.id}?category=${suggestion.category}`}
+                        onClick={() => setSearchDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-pink-50 transition border-b border-natural-light-border last:border-b-0"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-natural-primary-text truncate">
+                            {suggestion.name}
+                          </div>
+                          <div className="text-xs text-natural-helper-text mt-0.5">
+                            {getCategoryLabel(suggestion.category)}
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -298,7 +481,7 @@ const Home = () => {
               تصفح الفئات
             </h2>
             <Link
-              href="/categories"
+              href="/products"
               className="text-sm md:text-base text-brand-primary hover:underline"
             >
               عرض المزيد
@@ -360,57 +543,69 @@ const Home = () => {
               عرض الكل
             </Link>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-            {mostSearchedProducts.map((product, index) => (
-              <div
-                key={product.id}
-                className={`relative bg-white rounded-xl border border-natural-light-border overflow-hidden hover:shadow transition-shadow ${
-                  index === 2
+
+          {productsLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white rounded-xl border border-natural-light-border overflow-hidden animate-pulse">
+                  <div className="w-full aspect-[173/166] bg-gray-200" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+              {mostSearchedProducts.map((product, index) => (
+                <Link
+                  key={`${product.category}-${product.id}`}
+                  href={`/products/${product.id}?category=${product.category}`}
+                  className={`relative bg-white rounded-xl border border-natural-light-border overflow-hidden hover:shadow-lg transition-shadow ${index === 2
                     ? "hidden md:block"
                     : index === 3
-                    ? "hidden lg:block"
-                    : ""
-                }`}
-              >
-                <div className="relative w-full aspect-[173/166] border-b border-natural-light-border">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Image
-                      fill
-                      src={product.image}
-                      alt={product.name}
-                      className="object-contain w-full h-full p-2"
-                    />
+                      ? "hidden lg:block"
+                      : index === 4
+                        ? "hidden lg:block"
+                        : ""
+                    }`}
+                >
+                  <div className="relative w-full aspect-[173/166] border-b border-natural-light-border bg-gradient-to-b from-[#fff9fc] via-[#fff5f9] to-[#ffe9f3]">
+                    <div className="absolute inset-0 flex items-center justify-center p-3">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="object-contain w-full h-full"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-100 rounded" />
+                      )}
+                    </div>
+                    {/* Safety Score Badge */}
+                    {product.safety_score !== null && (
+                      <div
+                        className={`absolute top-2 left-2 w-8 h-8 ${getSafetyColorClass(
+                          product.safety_score
+                        )} rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg`}
+                      >
+                        {product.safety_score}
+                      </div>
+                    )}
                   </div>
-                  {/* Heart Icon - Top right in RTL */}
-                  <button
-                    className="absolute top-2 left-2 z-10 size-8  flex items-center justify-center rounded-full bg-white shadow transition-colors"
-                    aria-label="Add to favorites"
-                  >
-                    <Icon
-                      name="Heart"
-                      size={18}
-                      category="games"
-                      className="text-brand-primary size-[18px]"
-                    />
-                  </button>
-                </div>
-                <div className="p-3">
-                  {/* Rating Badge - Bottom left in RTL */}
-                  <div
-                    className={`mb-1 ${product.badgeColor} text-white rounded-full w-5 h-5 flex items-center justify-center font-bold text-xs`}
-                  >
-                    {product.badge}
+                  <div className="p-3">
+                    <p className="text-xs text-natural-helper-text truncate mb-1">
+                      {product.brand_name || "بدون ماركة"}
+                    </p>
+                    <p className="text-sm font-medium text-natural-primary-text line-clamp-2">
+                      {product.name}
+                    </p>
                   </div>
-                  <p className="text-sm  text-natural-primary-text font-medium mb-1">
-                    {product.company}
-                  </p>
-                  <p className="text-sm  font-medium text-natural-helper-text">
-                    {product.name}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Blog Section */}

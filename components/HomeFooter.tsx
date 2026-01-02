@@ -35,10 +35,10 @@ export default function HomeFooter({
   logoAlt = "Beauty Cops Logo",
   description = "منصة تساعدك على فهم مكونات منتجات الجمال والعناية، من خلال تحليلات علمية مبسطة وتوصيات ذكية لاختيار ما يناسبك بثقة.",
   socialLinks = [
-    { name: "Instagram", href: "#", iconName: "InstagramLogo" },
-    { name: "TikTok", href: "#", iconName: "TiktokLogo" },
+    { name: "Instagram", href: "https://www.instagram.com/beautycops.sa/?igsh=MWRsc3E3M2c2MDhsNw%3D%3D#", iconName: "InstagramLogo" },
+    { name: "TikTok", href: "https://www.tiktok.com/@beautycops.sa?_r=1&_t=ZS-92gAKNDqiKv", iconName: "TiktokLogo" },
     { name: "X (Twitter)", href: "#", iconName: "XLogo" },
-    { name: "LinkedIn", href: "#", iconName: "LinkedinLogo" },
+    { name: "LinkedIn", href: "https://www.linkedin.com/company/beautycops/", iconName: "LinkedinLogo" },
   ],
   address = "شارع العليا، حي الغدير, الرياض 13311 - المملكة العربية السعودية",
   email = "Info@BeautyCops.com",

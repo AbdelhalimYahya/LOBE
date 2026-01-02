@@ -25,14 +25,19 @@ const HeroBanner1 = () => {
               <p className="text-[13px] sm:text-sm md:text-base lg:text-lg xl:text-xl text-brand-primary mb-4 md:mb-5 lg:mb-6 xl:mb-8 md:max-w-[90%] lg:max-w-[85%]">
                 ابحث باسم المنتج لتحصل على تحليل فوري لسلامته
               </p>
-              <Link href="/analysis" className="inline-block">
-                <Button
-                  variant="primary"
-                  className="!w-fit !px-6 md:!px-8 lg:!px-10 h-[36px] md:h-[44px] lg:h-[48px] text-sm md:text-base lg:text-lg font-[500] rounded-full flex items-center justify-center"
-                >
-                  جرّب التحليل
-                </Button>
-              </Link>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const searchInput = document.getElementById("home-search-input");
+                  if (searchInput) {
+                    searchInput.scrollIntoView({ behavior: "smooth", block: "center" });
+                    searchInput.focus();
+                  }
+                }}
+                className="!w-fit !px-6 md:!px-8 lg:!px-10 h-[36px] md:h-[44px] lg:h-[48px] text-sm md:text-base lg:text-lg font-[500] rounded-full flex items-center justify-center inline-block"
+              >
+                جرّب التحليل
+              </Button>
             </div>
           </div>
           {/* Image - Right side in RTL */}
