@@ -1,8 +1,9 @@
 // app/categories/care/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { HomeFooter, MainNavbar, PageHeader } from "@/components";
 import { authenticatedFetch } from "@/lib/auth";
 
@@ -18,45 +19,12 @@ type SkincareProduct = {
   brand_name: string | null;
 };
 
-// ✅ شكل الـ Pagination من DRF
-type PaginatedResponse<T> = {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
+type BrandOption = {
+  label: string;
+  value: number;
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-const SKINCARE_ENDPOINT = `${API_BASE_URL}/v1/skincare/skincare_products/`;
-
-function extractList<T>(payload: unknown): T[] {
-  if (Array.isArray(payload)) return payload as T[];
-
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "results" in payload &&
-    Array.isArray((payload as Record<string, unknown>).results)
-  ) {
-    return ((payload as Record<string, unknown>).results as T[]);
-  }
-
-  return [];
-}
-
-async function getSkincareProducts(): Promise<SkincareProduct[]> {
-  const res = await authenticatedFetch(SKINCARE_ENDPOINT, {
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    console.error("Failed to fetch skincare products", res.status);
-    return [];
-  }
-
-  const json = await res.json();
-  return extractList<SkincareProduct>(json);
-}
 
 function generatePageNumbers(
   currentPage: number,
@@ -96,23 +64,45 @@ export default function CareCategoryPage() {
 }
 
 function CareCategoryPageContent() {
-  const [products, setProducts] = useState<SkincareProduct[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
+  // URL Params State (Source of Truth)
   const [pageParam, setPageParam] = useState<string | null>(null);
-
-  // حالات الفلاتر
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
-  const [selectedSkinType, setSelectedSkinType] = useState<string>("all");
+
+  // Local UI State
+  const [searchInput, setSearchInput] = useState("");
   const [minRating, setMinRating] = useState<string>("all");
 
+  // Data State
+  const [products, setProducts] = useState<SkincareProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [serverTotalPages, setServerTotalPages] = useState<number>(1);
+  const [brandsList, setBrandsList] = useState<BrandOption[]>([]);
+  const [hiddenProducts, setHiddenProducts] = useState<Set<string>>(new Set());
+
+
+  // 1. Read URL on mount & popstate
   useEffect(() => {
     const read = () => {
       try {
-        setPageParam(new URLSearchParams(window.location.search).get("page"));
+        const params = new URLSearchParams(window.location.search);
+
+        const page = params.get("page");
+        setPageParam(page);
+
+        const brand = params.get("brand") || "all";
+        setSelectedBrand(brand);
+
+        const search = params.get("search") || "";
+        setActiveSearchQuery(search);
+        setSearchInput(search); // Sync input
       } catch {
         setPageParam(null);
+        setSelectedBrand("all");
+        setActiveSearchQuery("");
+        setSearchInput("");
       }
     };
 
@@ -121,103 +111,104 @@ function CareCategoryPageContent() {
     return () => window.removeEventListener("popstate", read);
   }, []);
 
+  // 2. Fetch Brands
   useEffect(() => {
-    const load = async () => {
+    async function fetchBrands() {
       try {
-        const data = await getSkincareProducts();
-
-        const sorted = [...data].sort((a, b) => {
-          const aHasImage = !!a.image_url;
-          const bHasImage = !!b.image_url;
-          if (aHasImage === bHasImage) return 0;
-          return aHasImage ? -1 : 1;
-        });
-
-        setProducts(sorted);
+        const res = await authenticatedFetch(`${API_BASE_URL}/v1/skincare/select_brands/`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.results)) {
+            setBrandsList(data.results);
+          }
+        }
       } catch (err) {
-        console.error(err);
+        console.error("Failed to fetch brands", err);
+      }
+    }
+    fetchBrands();
+  }, []);
+
+  // 3. Fetch Products
+  useEffect(() => {
+    async function fetchProducts() {
+      setLoading(true);
+      try {
+        const page = Number(pageParam || "1");
+        const size = 12;
+
+        let url = `${API_BASE_URL}/v1/skincare/skincare_products/?page=${page}&size=${size}`;
+        if (selectedBrand !== "all") {
+          url += `&brand=${selectedBrand}`;
+        }
+        if (activeSearchQuery.trim()) {
+          url += `&search=${encodeURIComponent(activeSearchQuery.trim())}`;
+        }
+
+        const res = await authenticatedFetch(url);
+        if (!res.ok) throw new Error("Failed to fetch");
+
+        const data = await res.json();
+
+        if (data && Array.isArray(data.results)) {
+          setProducts(data.results);
+
+          if (data.count) {
+            setServerTotalPages(Math.ceil(data.count / size));
+          } else if (data.max_pages) {
+            setServerTotalPages(data.max_pages);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching products:", err);
         setProducts([]);
       } finally {
         setLoading(false);
       }
-    };
+    }
 
-    load();
-  }, []);
+    fetchProducts();
+  }, [pageParam, selectedBrand, activeSearchQuery]); // No searchInput in dependency
 
-  // خيارات الفلتر من البيانات
-  const brandOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          products
-            .map((p) => p.brand_name)
-            .filter((b): b is string => !!b && b.trim().length > 0)
-        )
-      ),
-    [products]
-  );
+  const currentPage = Number(pageParam || "1");
 
-  const skinTypeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          products
-            .map((p) => p.skin_type)
-            .filter((t): t is string => !!t && t.trim().length > 0)
-        )
-      ),
-    [products]
-  );
+  const buildUrl = (newPage: string | number, newBrand?: string, newSearch?: string) => {
+    const params = new URLSearchParams();
+    params.set("page", String(newPage));
 
-  // الفلترة
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      if (
-        searchQuery.trim() &&
-        !product.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ) {
-        return false;
-      }
+    // Check brand
+    const brandVal = newBrand !== undefined ? newBrand : selectedBrand;
+    if (brandVal !== "all") params.set("brand", brandVal);
 
-      if (selectedBrand !== "all" && product.brand_name !== selectedBrand) {
-        return false;
-      }
+    // Check search
+    const searchVal = newSearch !== undefined ? newSearch : searchInput;
+    if (searchVal.trim()) params.set("search", searchVal.trim());
 
-      if (selectedSkinType !== "all" && product.skin_type !== selectedSkinType) {
-        return false;
-      }
+    return `?${params.toString()}`;
+  };
 
-      if (minRating !== "all") {
-        const min = Number(minRating);
-        const rating = product.avg_rating ?? 0;
-        if (rating < min) return false;
-      }
+  const handleSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      setPageParam("1");
+      setActiveSearchQuery(searchInput);
+      router.push(buildUrl(1, undefined, searchInput));
+    }
+  };
 
-      return true;
-    });
-  }, [products, searchQuery, selectedBrand, selectedSkinType, minRating]);
-
-  // Pagination (frontend)
-  const pageSize = 12;
-  const totalProducts = filteredProducts.length;
-  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
-
-  let pageNumberRaw = Number(pageParam || "1");
-  if (!Number.isFinite(pageNumberRaw) || pageNumberRaw < 1) pageNumberRaw = 1;
-  const currentPage = Math.min(pageNumberRaw, totalPages);
-
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedProducts = filteredProducts.slice(
-    startIndex,
-    startIndex + pageSize
-  );
+  const handleSearchClick = () => {
+    setPageParam("1");
+    setActiveSearchQuery(searchInput);
+    router.push(buildUrl(1, undefined, searchInput));
+  };
 
   const handleResetFilters = () => {
-    setSearchQuery("");
     setSelectedBrand("all");
-    setSelectedSkinType("all");
     setMinRating("all");
+    setSearchInput("");
+    setActiveSearchQuery("");
+    setPageParam("1");
+    router.push("?page=1");
   };
 
   return (
@@ -228,7 +219,6 @@ function CareCategoryPageContent() {
       <MainNavbar />
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-10">
-        {/* نفس ستايل الهيدر الوردي */}
         <section className="mb-6 md:mb-8">
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-pink-500/12 via-rose-400/6 to-fuchsia-400/14 border border-pink-100 shadow-[0_18px_45px_rgba(244,114,182,0.18)]">
             <div className="absolute -left-10 -top-10 w-32 h-32 rounded-full bg-pink-300/25 blur-2xl" />
@@ -245,223 +235,189 @@ function CareCategoryPageContent() {
           </div>
         </section>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="flex flex-col items-center gap-3">
-              <div className="relative">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 via-rose-400 to-fuchsia-400 animate-pulse shadow-[0_20px_40px_rgba(244,114,182,0.35)]" />
-                <div className="absolute inset-0 rounded-2xl border border-white/40 backdrop-blur-sm" />
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+          {/* Sidebar Filters - ALWAYS RENDERED */}
+          <aside className="w-full md:w-64 md:sticky md:top-28 z-10">
+            <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-pink-50 shadow-[0_16px_35px_rgba(244,114,182,0.18)] px-3.5 py-4 md:px-4 md:py-5 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-col text-right">
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    تصفية النتائج
+                  </h2>
+                  <span className="text-[11px] text-slate-400">
+                    شوفي المنتجات اللي تناسبك أكثر ✨
+                  </span>
+                </div>
               </div>
-              <p className="text-center text-muted-foreground text-sm md:text-base">
-                جاري تحميل منتجات العناية بالبشرة...
-              </p>
-            </div>
-          </div>
-        ) : products.length === 0 ? (
-          <p className="text-center text-muted-foreground">
-            لا توجد منتجات حالياً في قاعدة البيانات.
-          </p>
-        ) : totalProducts === 0 ? (
-          <p className="text-center text-muted-foreground">
-            لا توجد منتجات مطابقة للفلاتر الحالية.
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-col md:flex-row gap-6 items-start">
-              {/* سايدبار الفلاتر */}
-              <aside className="w-full md:w-64 md:sticky md:top-28">
-                <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-pink-50 shadow-[0_16px_35px_rgba(244,114,182,0.18)] px-3.5 py-4 md:px-4 md:py-5 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex flex-col text-right">
-                      <h2 className="text-sm font-semibold text-slate-800">
-                        تصفية النتائج
-                      </h2>
-                      <span className="text-[11px] text-slate-400">
-                        شوفي المنتجات اللي تناسبك أكثر ✨
-                      </span>
-                    </div>
-                    <span className="text-[11px] md:text-xs rounded-full bg-pink-50 px-2 py-1 text-pink-600">
-                      {totalProducts} / {products.length}
-                    </span>
-                  </div>
 
-                  <div className="flex flex-col gap-2.5 text-right">
-                    {/* الماركة */}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] text-slate-500">
-                        الماركة
-                      </label>
-                      <select
-                        value={selectedBrand}
-                        onChange={(e) => setSelectedBrand(e.target.value)}
-                        className="w-full rounded-2xl border border-pink-100 bg-white px-3 py-1.5 text-[11px] text-right outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
-                      >
-                        <option value="all">الكل</option>
-                        {brandOptions.map((brand) => (
-                          <option key={brand} value={brand}>
-                            {brand}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+              <div className="flex flex-col gap-2.5 text-right">
 
-                    {/* نوع البشرة */}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] text-slate-500">
-                        نوع البشرة
-                      </label>
-                      <select
-                        value={selectedSkinType}
-                        onChange={(e) => setSelectedSkinType(e.target.value)}
-                        className="w-full rounded-2xl border border-pink-100 bg-white px-3 py-1.5 text-[11px] text-right outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
-                      >
-                        <option value="all">الكل</option>
-                        {skinTypeOptions.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* أقل تقييم */}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] text-slate-500">
-                        أقل تقييم
-                      </label>
-                      <select
-                        value={minRating}
-                        onChange={(e) => setMinRating(e.target.value)}
-                        className="w-full rounded-2xl border border-pink-100 bg-white px-3 py-1.5 text-[11px] text-right outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
-                      >
-                        <option value="all">بدون فلتر</option>
-                        <option value="4">4+ نجوم</option>
-                        <option value="3">3+ نجوم</option>
-                        <option value="2">2+ نجوم</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleResetFilters}
-                    className="mt-1 inline-flex items-center justify-center gap-1 rounded-full border border-pink-200 bg-white px-3 py-1.5 text-[11px] text-pink-600 hover:bg-pink-50 hover:border-pink-300 hover:shadow-[0_10px_25px_rgba(244,114,182,0.28)] hover:-translate-y-[1px] transition-all"
-                  >
-                    إعادة تعيين الفلاتر
-                  </button>
-                </div>
-              </aside>
-
-              {/* المنتجات */}
-              <section className="flex-1 flex flex-col gap-6">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
-                  {paginatedProducts.map((product) => (
-                    <Link
-                      key={product.skincare_id}
-                      href={`/products/${product.skincare_id}?category=skincare`}
-                      className="group rounded-3xl bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)] hover:shadow-[0_20px_45px_rgba(244,114,182,0.2)] hover:-translate-y-2 transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] flex flex-col overflow-hidden border border-pink-50"
+                {/* Search Filter */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] text-slate-500">
+                    بحث
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={handleSearchKey}
+                      placeholder="ابحث عن منتج..."
+                      className="w-full rounded-2xl border border-pink-100 bg-white px-3 py-1.5 text-[11px] text-right outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
+                    />
+                    <button
+                      onClick={handleSearchClick}
+                      className="bg-brand-primary text-white rounded-xl px-2 text-xs hover:bg-pink-600 transition"
                     >
-                      <div className="w-full aspect-[3/4] bg-gradient-to-b from-[#fff9fc] via-[#fff5f9] to-[#ffe9f3] flex items-center justify-center overflow-hidden">
-                        {product.image_url ? (
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="max-h-full max-w-full object-contain group-hover:scale-[1.08] group-hover:-translate-y-1 transition-transform duration-500 ease-[cubic-bezier(0.19,1,0.22,1)]"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground">
-                            <div className="w-9 h-9 rounded-2xl border border-pink-200/70 bg-white/80 flex items-center justify-center text-[11px] shadow-[0_10px_20px_rgba(236,72,153,0.35)]">
-                              ✨
-                            </div>
-                            <span className="px-2 text-center leading-snug">
-                              الصورة غير متوفرة حالياً
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-3.5 flex flex-col gap-1.5">
-                        <h2 className="font-semibold text-xs md:text-sm text-right line-clamp-2 text-slate-800">
-                          {product.name}
-                        </h2>
-
-                        <p className="text-[10px] md:text-xs text-right text-muted-foreground">
-                          شركة المنتج:{" "}
-                          <span className="font-medium text-pink-700">
-                            {product.brand_name ?? "غير معروف"}
-                          </span>
-                        </p>
-
-                        <div className="mt-auto space-y-0.5 text-[10px] md:text-xs text-right text-muted-foreground">
-                          <p>
-                            نوع البشرة:{" "}
-                            <span className="font-medium text-slate-900">
-                              {product.skin_type ?? "غير محدد"}
-                            </span>
-                          </p>
-                          <p className="flex items-center justify-between gap-2">
-                            <span>
-                              التقييم:{" "}
-                              <span className="font-medium text-slate-900">
-                                {product.avg_rating ?? "-"}
-                              </span>{" "}
-                              ({product.reviews_count ?? 0} مراجعات)
-                            </span>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-l from-amber-400 via-pink-400 to-fuchsia-500 text-white px-2 py-[3px] text-[10px] shadow-[0_10px_25px_rgba(244,114,182,0.5)]">
-                              ⭐
-                              <span className="font-semibold">
-                                {product.avg_rating ?? "جديد"}
-                              </span>
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
+                      🔍
+                    </button>
+                  </div>
                 </div>
 
-                {/* الباجينيشن */}
-                {totalPages > 1 && (
-                  <nav className="mt-2 flex justify-center items-center gap-2 text-sm md:text-base">
-                    {currentPage > 1 && (
-                      <Link
-                        href={`?page=1`}
-                        onClick={() => setPageParam("1")}
-                        className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
-                      >
-                        «
-                      </Link>
-                    )}
+                {/* Brand Filter */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] text-slate-500">
+                    الماركة
+                  </label>
+                  <select
+                    value={selectedBrand}
+                    onChange={(e) => {
+                      const newBrand = e.target.value;
+                      setSelectedBrand(newBrand);
+                      setPageParam("1");
+                      router.push(buildUrl(1, newBrand, activeSearchQuery));
+                    }}
+                    className="w-full rounded-2xl border border-pink-100 bg-white px-3 py-1.5 text-[11px] text-right outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
+                  >
+                    <option value="all">الكل</option>
+                    {brandsList.map((brand) => (
+                      <option key={brand.value} value={brand.value}>
+                        {brand.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                    {currentPage > 1 && (
-                      <Link
-                        href={`?page=${currentPage - 1}`}
-                        onClick={() => setPageParam(String(currentPage - 1))}
-                        className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
-                      >
-                        ‹
-                      </Link>
-                    )}
+                {/* Rating Filter (Disabled) */}
+                <div className="flex flex-col gap-1 opacity-50 cursor-not-allowed">
+                  <label className="text-[11px] text-slate-500">
+                    أقل تقييم (غير متاح حالياً)
+                  </label>
+                  <select
+                    value={minRating}
+                    disabled
+                    className="w-full rounded-2xl border border-pink-100 bg-white px-3 py-1.5 text-[11px] text-right outline-none bg-gray-100 cursor-not-allowed"
+                  >
+                    <option value="all">بدون فلتر</option>
+                  </select>
+                </div>
+              </div>
 
-                    {generatePageNumbers(currentPage, totalPages).map((item, idx) => {
-                      if (item === "dots") {
-                        return (
-                          <span
-                            key={`dots-${idx}`}
-                            className="min-w-[36px] h-9 flex items-center justify-center text-xs md:text-sm text-muted-foreground"
-                          >
-                            ...
-                          </span>
-                        );
-                      }
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="mt-1 inline-flex items-center justify-center gap-1 rounded-full border border-pink-200 bg-white px-3 py-1.5 text-[11px] text-pink-600 hover:bg-pink-50 hover:border-pink-300 hover:shadow-[0_10px_25px_rgba(244,114,182,0.28)] hover:-translate-y-[1px] transition-all"
+              >
+                إعادة تعيين الفلاتر
+              </button>
+            </div>
+          </aside>
 
-                      const page = item as number;
-                      const isActive = page === currentPage;
+          {/* Products Grid */}
+          <section className="flex-1 flex flex-col gap-6 min-h-[500px]">
+            {loading ? (
+              <div className="flex items-center justify-center py-16 h-full">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 via-rose-400 to-fuchsia-400 animate-pulse shadow-[0_20px_40px_rgba(244,114,182,0.35)]" />
+                    <div className="absolute inset-0 rounded-2xl border border-white/40 backdrop-blur-sm" />
+                  </div>
+                  <p className="text-center text-muted-foreground text-sm md:text-base">
+                    جاري تحميل منتجات العناية بالبشرة...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {products.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-10">
+                    لا توجد منتجات مطابقة للفلاتر الحالية.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+                    {products.map((product) => {
+                      if (hiddenProducts.has(String(product.skincare_id))) return null;
 
                       return (
                         <Link
+                          key={product.skincare_id}
+                          href={`/products/${product.skincare_id}?category=skincare`}
+                          className="group rounded-3xl bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)] hover:shadow-[0_20px_45px_rgba(244,114,182,0.2)] hover:-translate-y-2 transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] flex flex-col overflow-hidden border border-pink-50"
+                        >
+                          <div className="w-full aspect-[3/4] bg-gradient-to-b from-[#fff9fc] via-[#fff5f9] to-[#ffe9f3] flex items-center justify-center overflow-hidden">
+                            {product.image_url ? (
+                              <img
+                                src={product.image_url}
+                                alt={product.name}
+                                onError={() => {
+                                  setHiddenProducts(prev => {
+                                    const next = new Set(prev);
+                                    next.add(String(product.skincare_id));
+                                    return next;
+                                  });
+                                }}
+                                className="max-h-full max-w-full object-contain group-hover:scale-[1.08] group-hover:-translate-y-1 transition-transform duration-500 ease-[cubic-bezier(0.19,1,0.22,1)]"
+                              />
+                            ) : (
+                              <div className="flex flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground w-full h-full">
+                                <span>الصورة غير متوفرة</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-3.5 flex flex-col gap-1.5">
+                            <h2 className="font-semibold text-xs md:text-sm text-right line-clamp-2 text-slate-800">
+                              {product.name}
+                            </h2>
+
+                            <p className="text-[10px] md:text-xs text-right text-muted-foreground">
+                              شركة المنتج:{" "}
+                              <span className="font-medium text-pink-700">
+                                {product.brand_name ?? "غير معروف"}
+                              </span>
+                            </p>
+
+                            <div className="mt-auto space-y-0.5 text-[10px] md:text-xs text-right text-muted-foreground">
+                              <p>
+                                نوع البشرة:{" "}
+                                <span className="font-medium text-slate-900">
+                                  {product.skin_type ?? "غير محدد"}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {serverTotalPages > 1 && (
+                  <nav className="mt-2 flex justify-center items-center gap-2 text-sm md:text-base">
+                    {generatePageNumbers(currentPage, serverTotalPages).map((item, idx) => {
+                      if (item === "dots") {
+                        return (
+                          <span key={`dots-${idx}`} className="text-muted-foreground">...</span>
+                        );
+                      }
+                      const page = item as number;
+                      const isActive = page === currentPage;
+                      return (
+                        <Link
                           key={page}
-                          href={`?page=${page}`}
+                          href={buildUrl(page, selectedBrand, activeSearchQuery)}
                           onClick={() => setPageParam(String(page))}
                           className={[
                             "min-w-[36px] h-9 flex items-center justify-center rounded-full border text-xs md:text-sm transition-all",
@@ -474,32 +430,12 @@ function CareCategoryPageContent() {
                         </Link>
                       );
                     })}
-
-                    {currentPage < totalPages && (
-                      <Link
-                        href={`?page=${currentPage + 1}`}
-                        onClick={() => setPageParam(String(currentPage + 1))}
-                        className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
-                      >
-                        ›
-                      </Link>
-                    )}
-
-                    {currentPage < totalPages && (
-                      <Link
-                        href={`?page=${totalPages}`}
-                        onClick={() => setPageParam(String(totalPages))}
-                        className="min-w-[36px] h-9 flex items-center justify-center rounded-full border border-pink-100 bg-white text-xs md:text-sm text-pink-500 hover:border-pink-300 hover:shadow-[0_12px_30px_rgba(244,114,182,0.45)] hover:-translate-y-[2px] transition-all"
-                      >
-                        »
-                      </Link>
-                    )}
                   </nav>
                 )}
-              </section>
-            </div>
-          </>
-        )}
+              </>
+            )}
+          </section>
+        </div>
       </main>
 
       <HomeFooter />

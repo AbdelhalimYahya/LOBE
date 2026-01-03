@@ -524,31 +524,31 @@ function ProductDetailsPageContent({ params }: PageProps) {
 
   const retailers: Retailer[] = product
     ? [
-        {
-          id: "1",
-          name: "Sephora",
-          nameAr: "سيفورا",
-          logo: sephoraLogo,
-          subtitle: findAffiliateUrl("sephora") ? "sephora.com" : "غير متوفر",
-          affiliateUrl: findAffiliateUrl("sephora"),
-        },
-        {
-          id: "2",
-          name: "Amazon",
-          nameAr: "أمازون",
-          logo: amazonLogo,
-          subtitle: findAffiliateUrl("amazon") ? "amazon.sa" : "غير متوفر",
-          affiliateUrl: findAffiliateUrl("amazon"),
-        },
-        {
-          id: "3",
-          name: "Nice One",
-          nameAr: "نايس ون",
-          logo: niceoneLogo,
-          subtitle: findAffiliateUrl("niceone") ? "niceonesa.com" : "غير متوفر",
-          affiliateUrl: findAffiliateUrl("niceone"),
-        },
-      ]
+      {
+        id: "1",
+        name: "Sephora",
+        nameAr: "سيفورا",
+        logo: sephoraLogo,
+        subtitle: findAffiliateUrl("sephora") ? "sephora.com" : "غير متوفر",
+        affiliateUrl: findAffiliateUrl("sephora"),
+      },
+      {
+        id: "2",
+        name: "Amazon",
+        nameAr: "أمازون",
+        logo: amazonLogo,
+        subtitle: findAffiliateUrl("amazon") ? "amazon.sa" : "غير متوفر",
+        affiliateUrl: findAffiliateUrl("amazon"),
+      },
+      {
+        id: "3",
+        name: "Nice One",
+        nameAr: "نايس ون",
+        logo: niceoneLogo,
+        subtitle: findAffiliateUrl("niceone") ? "niceonesa.com" : "غير متوفر",
+        affiliateUrl: findAffiliateUrl("niceone"),
+      },
+    ]
     : [];
 
   // ========= UI =========
@@ -653,8 +653,8 @@ function ProductDetailsPageContent({ params }: PageProps) {
                         {product.category === "skincare"
                           ? "العناية بالبشرة"
                           : product.category === "makeup"
-                          ? "المكياج"
-                          : "العناية بالشعر"}
+                            ? "المكياج"
+                            : "العناية بالشعر"}
                       </p>
                     </div>
 
@@ -717,9 +717,8 @@ function ProductDetailsPageContent({ params }: PageProps) {
                               </button>
                               {ingredient.description && (
                                 <div
-                                  className={`px-3 pb-3 text-xs text-[#555555] text-right transition-all ${
-                                    isExpanded ? "max-h-40 mt-1" : "max-h-0 overflow-hidden"
-                                  }`}
+                                  className={`px-3 pb-3 text-xs text-[#555555] text-right transition-all ${isExpanded ? "max-h-40 mt-1" : "max-h-0 overflow-hidden"
+                                    }`}
                                 >
                                   {ingredient.description}
                                 </div>
@@ -736,6 +735,20 @@ function ProductDetailsPageContent({ params }: PageProps) {
               {/* زر متوفر لدى */}
               <button
                 type="button"
+                onClick={() => {
+                  const links = product?.affiliate_links || [];
+                  // Prefer retailers but fallback to any link
+                  const retailerLink = retailers.find(r => r.affiliateUrl)?.affiliateUrl;
+                  const anyLink = links.length > 0 ? links[0].url : null;
+
+                  const targetLink = retailerLink || anyLink;
+
+                  if (targetLink) {
+                    window.open(targetLink, "_blank", "noopener,noreferrer");
+                  } else {
+                    router.push("/coming-soon");
+                  }
+                }}
                 className="w-full rounded-3xl text-white font-medium flex items-center justify-center transition-opacity hover:opacity-90"
                 style={{
                   background:
@@ -786,23 +799,16 @@ function ProductDetailsPageContent({ params }: PageProps) {
                         </>
                       );
 
-                      return clickable ? (
-                        <a
+                      return (
+                        <Link
                           key={retailer.id}
-                          href={retailer.affiliateUrl!}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={retailer.affiliateUrl || "/coming-soon"}
+                          target={retailer.affiliateUrl ? "_blank" : undefined}
+                          rel={retailer.affiliateUrl ? "noopener noreferrer" : undefined}
                           className="flex items-center gap-4 p-2 bg-white rounded-lg border-b border-[#E5E5E5] hover:bg-[#FFF5FB] transition-colors cursor-pointer"
                         >
                           {content}
-                        </a>
-                      ) : (
-                        <div
-                          key={retailer.id}
-                          className="flex items-center gap-4 p-2 bg-white rounded-lg border-b border-[#E5E5E5] opacity-70 cursor-not-allowed"
-                        >
-                          {content}
-                        </div>
+                        </Link>
                       );
                     })}
 

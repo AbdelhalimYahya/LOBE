@@ -85,9 +85,14 @@ const Home = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch most searched products on mount
+  // Fetch most searched products - ONLY IF LOGIN
   useEffect(() => {
     async function fetchMostSearchedProducts() {
+      if (!isLogin) {
+        setProductsLoading(false);
+        return;
+      }
+
       try {
         setProductsLoading(true);
 
@@ -101,8 +106,6 @@ const Home = () => {
         }
 
         const data = await res.json();
-
-        console.log("Products data:", data); // Debug log
 
         const products: Product[] = [];
 
@@ -119,7 +122,6 @@ const Home = () => {
           });
         }
 
-        console.log("Mapped products:", products); // Debug log
         setMostSearchedProducts(products);
       } catch (error) {
         console.error("Failed to fetch products:", error);
@@ -129,7 +131,7 @@ const Home = () => {
     }
 
     fetchMostSearchedProducts();
-  }, []);
+  }, [isLogin]);
 
   // Search suggestions effect
   useEffect(() => {
@@ -144,8 +146,6 @@ const Home = () => {
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        console.log("Searching for:", q); // Debug log
-
         const [skincareRes, makeupRes, haircareRes] = await Promise.all([
           authenticatedFetch(`${API_BASE}/v1/skincare/skincare_products/?page=1&size=10&search=${encodeURIComponent(q)}`, { signal: controller.signal }),
           authenticatedFetch(`${API_BASE}/v1/makeup/makeup_products/?page=1&size=10&search=${encodeURIComponent(q)}`, { signal: controller.signal }),
@@ -157,8 +157,6 @@ const Home = () => {
           makeupRes.json(),
           haircareRes.json(),
         ]);
-
-        console.log("Search results:", { skincareData, makeupData, haircareData }); // Debug log
 
         const suggestions: SearchSuggestion[] = [];
 
@@ -201,7 +199,6 @@ const Home = () => {
           });
         }
 
-        console.log("Final suggestions:", suggestions); // Debug log
         setSearchSuggestions(suggestions.slice(0, 10));
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -251,25 +248,25 @@ const Home = () => {
       name: "العناية",
       icon: EyeglassesIcon,
       category: "commerce",
-      href: "/categories/care",
+      href: isLogin ? "/categories/care" : "/login",
     },
     {
       name: "الشعر",
       icon: HairDryerIcon,
       category: "commerce",
-      href: "/categories/hair",
+      href: isLogin ? "/categories/hair" : "/login",
     },
     {
       name: "المكياج",
       icon: SunglassesIcon,
       category: "commerce",
-      href: "/categories/makeup",
+      href: isLogin ? "/categories/makeup" : "/login",
     },
     {
       name: "العطور",
       icon: WineIcon,
       category: "commerce",
-      href: "/categories/perfumes",
+      href: isLogin ? "/categories/perfumes" : "/login",
     },
   ];
 
@@ -530,83 +527,85 @@ const Home = () => {
           </div>
         </section>
 
-        {/* Most Searched Products Section */}
-        <section className="mb-8 lg:mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-natural-primary-text">
-              المنتجات الأكثر بحثاً
-            </h2>
-            <Link
-              href="/products"
-              className="text-sm md:text-base text-brand-primary hover:underline"
-            >
-              عرض الكل
-            </Link>
-          </div>
-
-          {productsLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="bg-white rounded-xl border border-natural-light-border overflow-hidden animate-pulse">
-                  <div className="w-full aspect-[173/166] bg-gray-200" />
-                  <div className="p-3 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4" />
-                    <div className="h-3 bg-gray-200 rounded w-1/2" />
-                  </div>
-                </div>
-              ))}
+        {/* Most Searched Products Section - ONLY SHOW IF LOGIN */}
+        {isLogin && (
+          <section className="mb-8 lg:mb-12">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-natural-primary-text">
+                المنتجات الأكثر بحثاً
+              </h2>
+              <Link
+                href="/products"
+                className="text-sm md:text-base text-brand-primary hover:underline"
+              >
+                عرض الكل
+              </Link>
             </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-              {mostSearchedProducts.map((product, index) => (
-                <Link
-                  key={`${product.category}-${product.id}`}
-                  href={`/products/${product.id}?category=${product.category}`}
-                  className={`relative bg-white rounded-xl border border-natural-light-border overflow-hidden hover:shadow-lg transition-shadow ${index === 2
-                    ? "hidden md:block"
-                    : index === 3
-                      ? "hidden lg:block"
-                      : index === 4
+
+            {productsLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="bg-white rounded-xl border border-natural-light-border overflow-hidden animate-pulse">
+                    <div className="w-full aspect-[173/166] bg-gray-200" />
+                    <div className="p-3 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      <div className="h-3 bg-gray-200 rounded w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+                {mostSearchedProducts.map((product, index) => (
+                  <Link
+                    key={`${product.category}-${product.id}`}
+                    href={`/products/${product.id}?category=${product.category}`}
+                    className={`relative bg-white rounded-xl border border-natural-light-border overflow-hidden hover:shadow-lg transition-shadow ${index === 2
+                      ? "hidden md:block"
+                      : index === 3
                         ? "hidden lg:block"
-                        : ""
-                    }`}
-                >
-                  <div className="relative w-full aspect-[173/166] border-b border-natural-light-border bg-gradient-to-b from-[#fff9fc] via-[#fff5f9] to-[#ffe9f3]">
-                    <div className="absolute inset-0 flex items-center justify-center p-3">
-                      {product.image_url ? (
-                        <img
-                          src={product.image_url}
-                          alt={product.name}
-                          className="object-contain w-full h-full"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 rounded" />
+                        : index === 4
+                          ? "hidden lg:block"
+                          : ""
+                      }`}
+                  >
+                    <div className="relative w-full aspect-[173/166] border-b border-natural-light-border bg-gradient-to-b from-[#fff9fc] via-[#fff5f9] to-[#ffe9f3]">
+                      <div className="absolute inset-0 flex items-center justify-center p-3">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="object-contain w-full h-full"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 rounded" />
+                        )}
+                      </div>
+                      {/* Safety Score Badge */}
+                      {product.safety_score !== null && (
+                        <div
+                          className={`absolute top-2 left-2 w-8 h-8 ${getSafetyColorClass(
+                            product.safety_score
+                          )} rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg`}
+                        >
+                          {product.safety_score}
+                        </div>
                       )}
                     </div>
-                    {/* Safety Score Badge */}
-                    {product.safety_score !== null && (
-                      <div
-                        className={`absolute top-2 left-2 w-8 h-8 ${getSafetyColorClass(
-                          product.safety_score
-                        )} rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg`}
-                      >
-                        {product.safety_score}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="text-xs text-natural-helper-text truncate mb-1">
-                      {product.brand_name || "بدون ماركة"}
-                    </p>
-                    <p className="text-sm font-medium text-natural-primary-text line-clamp-2">
-                      {product.name}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+                    <div className="p-3">
+                      <p className="text-xs text-natural-helper-text truncate mb-1">
+                        {product.brand_name || "بدون ماركة"}
+                      </p>
+                      <p className="text-sm font-medium text-natural-primary-text line-clamp-2">
+                        {product.name}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Blog Section */}
         <section className="mb-6 md:mb-8 lg:mb-12">
