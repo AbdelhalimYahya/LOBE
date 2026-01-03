@@ -145,7 +145,7 @@ export default function FavoritesPage() {
   // Get safety score badge color based on score
   const getSafetyScoreColor = (score: number | null | undefined): string => {
     if (!score) return "#CCCCCC"; // Gray for no score
-    if (score >= 7) return "#F10101"; // Red
+    if (score >= 8) return "#F10101"; // Red
     if (score >= 4) return "#FFBF13"; // Yellow
     return "#22B07D"; // Green
   };
@@ -203,18 +203,16 @@ export default function FavoritesPage() {
 
       {/* Main Content */}
       <main
-        className={`flex flex-1 flex-col items-center ${
-          favoriteProducts.length === 0 ? "justify-center" : "justify-start"
-        } px-4 sm:px-6 lg:px-8 pt-8 md:py-6 lg:py-8 pb-24 md:pb-8 overflow-y-auto scrollbar-right`}
+        className={`flex flex-1 flex-col items-center ${favoriteProducts.length === 0 ? "justify-center" : "justify-start"
+          } px-4 sm:px-6 lg:px-8 pt-8 md:py-6 lg:py-8 pb-24 md:pb-8 overflow-y-auto scrollbar-right`}
       >
         <div className="w-full md:max-w-7xl">
           {/* Content Container */}
           <div
-            className={`flex flex-col ${
-              favoriteProducts.length === 0
-                ? "flex-1 justify-center"
-                : "gap-5 md:gap-8 lg:gap-10"
-            }`}
+            className={`flex flex-col ${favoriteProducts.length === 0
+              ? "flex-1 justify-center"
+              : "gap-5 md:gap-8 lg:gap-10"
+              }`}
           >
             {/* Promotional Banner - Only show when there are favorite products */}
             {favoriteProducts.length > 0 && (
@@ -270,7 +268,7 @@ export default function FavoritesPage() {
 
                     {/* Product Image Section - Desktop */}
                     <Link
-                      href={`/products/${product.id}?category=${product.category}`}
+                      href={product.category === "hair" ? "/coming-soon" : `/products/${product.id}?category=${product.category}`}
                       className="hidden md:block relative w-full aspect-[173/166] border-b border-natural-light-border overflow-hidden"
                     >
                       {product.image_url ? (

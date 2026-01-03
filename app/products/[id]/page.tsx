@@ -183,8 +183,8 @@ const computeOverallSafetyScore = (ingredients: Ingredient[]): number | null => 
   if (scores.length === 0) return null;
 
   const base = Math.max(...scores);
-  const highCount = scores.filter((s) => s >= 7).length;
-  const mediumCount = scores.filter((s) => s >= 4 && s <= 6).length;
+  const highCount = scores.filter((s) => s >= 8).length;
+  const mediumCount = scores.filter((s) => s >= 4 && s <= 7).length;
 
   const penalty =
     0.5 * Math.max(0, highCount - 1) + 0.25 * Math.max(0, mediumCount - 2);
@@ -199,14 +199,14 @@ const computeOverallSafetyScore = (ingredients: Ingredient[]): number | null => 
 // ألوان الدائرة (مكوّن أو منتج) – مقياس 1–10
 const getSafetyScoreColor = (score: number | null): string => {
   if (score === null) return "#CCCCCC";
-  if (score >= 7) return "#F10101";
+  if (score >= 8) return "#F10101";
   if (score >= 4) return "#FFBF13";
   return "#22B07D";
 };
 
 const getSafetyLabel = (score: number | null): string => {
   if (score === null) return "غير متوفر";
-  if (score >= 7) return "خطر";
+  if (score >= 8) return "خطر";
   if (score >= 4) return "متوسط";
   return "آمن";
 };

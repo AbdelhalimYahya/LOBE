@@ -96,33 +96,40 @@ const Home = () => {
       try {
         setProductsLoading(true);
 
-        // Just fetch first 4 products from skincare using authenticated fetch
-        const res = await authenticatedFetch(`${API_BASE}/v1/skincare/skincare_products/?page=1&size=4`);
+        const targetProducts = [
+          { id: 122, category: "makeup" },
+          { id: 448, category: "makeup" },
+          { id: 18658, category: "skincare" },
+          { id: 19596, category: "skincare" },
+        ];
 
-        if (!res.ok) {
-          console.error("Failed to fetch products:", res.status, res.statusText);
-          setProductsLoading(false);
-          return;
-        }
+        const results = await Promise.all(
+          targetProducts.map(async (p) => {
+            try {
+              const res = await authenticatedFetch(
+                `${API_BASE}/v1/${p.category}/${p.category}_products/${p.id}/`
+              );
+              if (!res.ok) return null;
+              const data = await res.json();
+              return { ...data, category: p.category };
+            } catch {
+              return null;
+            }
+          })
+        );
 
-        const data = await res.json();
+        const validProducts: Product[] = results
+          .filter((p) => p !== null)
+          .map((p: any) => ({
+            id: p.skincare_id || p.makeup_id,
+            name: p.name,
+            brand_name: p.brand_name,
+            image_url: p.image_url,
+            safety_score: p.safety_score,
+            category: p.category,
+          }));
 
-        const products: Product[] = [];
-
-        if (data.results && Array.isArray(data.results)) {
-          data.results.forEach((p: any) => {
-            products.push({
-              id: p.skincare_id,
-              name: p.name,
-              brand_name: p.brand_name,
-              image_url: p.image_url,
-              safety_score: p.safety_score,
-              category: "skincare",
-            });
-          });
-        }
-
-        setMostSearchedProducts(products);
+        setMostSearchedProducts(validProducts);
       } catch (error) {
         console.error("Failed to fetch products:", error);
       } finally {
@@ -238,8 +245,8 @@ const Home = () => {
 
   const getSafetyColorClass = (score: number | null): string => {
     if (score === null) return "bg-gray-300";
-    if (score <= 2) return "bg-green-500";
-    if (score <= 3) return "bg-yellow-500";
+    if (score <= 3) return "bg-green-500";
+    if (score <= 7) return "bg-yellow-500";
     return "bg-red-500";
   };
 
@@ -450,7 +457,7 @@ const Home = () => {
                     {searchSuggestions.map((suggestion) => (
                       <Link
                         key={`${suggestion.category}-${suggestion.id}`}
-                        href={`/products/${suggestion.id}?category=${suggestion.category}`}
+                        href={suggestion.category === "haircare" ? "/coming-soon" : `/products/${suggestion.id}?category=${suggestion.category}`}
                         onClick={() => setSearchDropdownOpen(false)}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-pink-50 transition border-b border-natural-light-border last:border-b-0"
                       >
@@ -559,7 +566,7 @@ const Home = () => {
                 {mostSearchedProducts.map((product, index) => (
                   <Link
                     key={`${product.category}-${product.id}`}
-                    href={`/products/${product.id}?category=${product.category}`}
+                    href={product.category === "haircare" ? "/coming-soon" : `/products/${product.id}?category=${product.category}`}
                     className={`relative bg-white rounded-xl border border-natural-light-border overflow-hidden hover:shadow-lg transition-shadow ${index === 2
                       ? "hidden md:block"
                       : index === 3

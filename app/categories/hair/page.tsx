@@ -218,8 +218,8 @@ function HairCategoryPageContent() {
 
   const getSafetyColorClass = (score: number | null) => {
     if (score === null) return "bg-slate-300";
-    if (score <= 2.0) return "bg-emerald-500"; // Safe
-    if (score <= 3.5) return "bg-amber-400"; // Medium
+    if (score <= 3) return "bg-emerald-500"; // Safe
+    if (score <= 7) return "bg-amber-400"; // Medium
     return "bg-red-500"; // High
   };
 
@@ -368,7 +368,7 @@ function HairCategoryPageContent() {
                       return (
                         <Link
                           key={product.haircare_id}
-                          href={`/products/${product.haircare_id}?category=haircare`}
+                          href="/coming-soon"
                           className="group rounded-3xl bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)] hover:shadow-[0_20px_45px_rgba(244,114,182,0.2)] hover:-translate-y-2 transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] flex flex-col overflow-hidden border border-pink-50"
                         >
                           <div className="relative w-full aspect-[3/4] bg-gradient-to-b from-[#fff9fc] via-[#fff5f9] to-[#ffe9f3] flex items-center justify-center overflow-hidden">

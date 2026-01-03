@@ -371,8 +371,8 @@ function ProductsPageContent() {
 
   const getSafetyColorClass = (score: number | null): string => {
     if (score === null) return "bg-gray-300";
-    if (score <= 2) return "bg-green-500";
-    if (score <= 3) return "bg-yellow-500";
+    if (score <= 3) return "bg-green-500";
+    if (score <= 7) return "bg-yellow-500";
     return "bg-red-500";
   };
 
@@ -521,7 +521,7 @@ function ProductsPageContent() {
                     return (
                       <Link
                         key={`${category}-${id}`}
-                        href={`/products/${id}?category=${category}`}
+                        href={category === "haircare" ? "/coming-soon" : `/products/${id}?category=${category}`}
                         className="group relative rounded-3xl bg-white/95 border border-pink-50 shadow-[0_18px_35px_rgba(15,23,42,0.04)] hover:shadow-[0_25px_55px_rgba(244,114,182,0.22)] hover:-translate-y-2 transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] flex flex-col overflow-hidden"
                       >
                         <div className="relative w-full aspect-[3/4] bg-gradient-to-b from-[#fff9fc] via-[#fff5f9] to-[#ffe9f3] flex items-center justify-center overflow-hidden">
