@@ -130,6 +130,8 @@ function MakeupCategoryPageContent() {
 
   // 3. Fetch Products
   useEffect(() => {
+    let isActive = true;
+
     async function fetchProducts() {
       setLoading(true);
       try {
@@ -145,9 +147,12 @@ function MakeupCategoryPageContent() {
         }
 
         const res = await authenticatedFetch(url);
+        if (!isActive) return;
+
         if (!res.ok) throw new Error("Failed to fetch");
 
         const data = await res.json();
+        if (!isActive) return;
 
         if (data && Array.isArray(data.results)) {
           setProducts(data.results);
@@ -159,14 +164,19 @@ function MakeupCategoryPageContent() {
           }
         }
       } catch (err) {
+        if (!isActive) return;
         console.error("Error fetching makeup products:", err);
         setProducts([]);
       } finally {
-        setLoading(false);
+        if (isActive) setLoading(false);
       }
     }
 
     fetchProducts();
+
+    return () => {
+      isActive = false;
+    };
   }, [pageParam, selectedBrand, activeSearchQuery]);
 
   const currentPage = Number(pageParam || "1");

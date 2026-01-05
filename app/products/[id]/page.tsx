@@ -131,6 +131,20 @@ const normalizeAffiliateLinks = (raw: unknown): AffiliateLink[] => {
 
   const mapped = arr
     .map((x) => {
+      // Handle simple string URLs
+      if (typeof x === "string") {
+        let url = x.trim();
+        if (!url) return null;
+        if (!/^https?:\/\//i.test(url)) {
+          url = "https://" + url;
+        }
+        return {
+          store: "unknown",
+          marketplace: null,
+          url,
+        } as AffiliateLink;
+      }
+
       if (!isRecord(x)) return null;
 
       // بعض الباكند يرجع: {store, marketplace, url}
@@ -141,9 +155,14 @@ const normalizeAffiliateLinks = (raw: unknown): AffiliateLink[] => {
         x["url"] ?? x["affiliate_url"] ?? x["affiliateUrl"] ?? x["link"] ?? null;
 
       const store = normalizeStoreName(storeRaw);
-      const url = typeof urlRaw === "string" ? urlRaw.trim() : "";
+      let url = typeof urlRaw === "string" ? urlRaw.trim() : "";
 
       if (!url) return null;
+
+      // Ensure protocol
+      if (!/^https?:\/\//i.test(url)) {
+        url = "https://" + url;
+      }
 
       const marketplaceRaw = x["marketplace"] ?? x["mp"] ?? null;
 
@@ -293,9 +312,59 @@ function ProductDetailsPageContent({ params }: PageProps) {
     const data: unknown = await res.json();
     const dataObj = isRecord(data) ? data : {};
 
-    const affiliateLinks = normalizeAffiliateLinks(
-      dataObj["affiliate_links"] ?? dataObj["affiliateLinks"] ?? dataObj["links"] ?? []
-    );
+    let extraLinks: unknown[] = [];
+    // Fetch dedicated affiliate links for all categories dynamically
+    if (true) {
+      try {
+        console.log(`Fetching affiliate links for ID: ${productId} [${category}]`);
+        const affRes = await authenticatedFetch(
+          `${API_BASE_URL}/v1/${pathSegment}/product_affiliate_links/${productId}/`
+        );
+        console.log(`Affiliate ID: ${productId} Status: ${affRes.status}`);
+
+        if (affRes.ok) {
+          // Check content type or text first to avoid JSON parse error on empty body
+          const text = await affRes.text();
+          console.log("Affiliate Raw Response:", text);
+
+          if (text && text.trim().length > 0) {
+            const affData = JSON.parse(text);
+            console.log("Affiliate Parsed JSON:", affData);
+
+            if (Array.isArray(affData)) {
+              extraLinks = affData;
+            } else if (isRecord(affData) && Array.isArray(affData.results)) {
+              extraLinks = affData.results as unknown[];
+            } else if (isRecord(affData)) {
+              // Fallback if it returns a single object? Unlikely but safe to wrap
+              extraLinks = [affData];
+            }
+          } else {
+            console.warn("Affiliate response body is empty.");
+          }
+        } else {
+          console.warn("Affiliate fetch failed:", affRes.statusText);
+        }
+      } catch (err) {
+        console.error("Error fetching separate affiliate links:", err);
+      }
+    }
+
+    console.log("Final Extra Links:", extraLinks);
+
+    const rawLinks =
+      dataObj["affiliate_links"] ??
+      dataObj["affiliateLinks"] ??
+      dataObj["links"] ??
+      [];
+
+    // Merge both sources
+    const combinedRaw = [
+      ...(Array.isArray(rawLinks) ? rawLinks : []),
+      ...extraLinks,
+    ];
+
+    const affiliateLinks = normalizeAffiliateLinks(combinedRaw);
 
     if (category === "skincare") {
       const d = data as SkincareProductApi;
