@@ -1,0 +1,46 @@
+name: Release Next.js (QA)
+
+env:
+  DOCKER_BUILDKIT: 1
+  NEXTJS_IMAGE_NAME: ${{ vars.DOCKER_REGISTRY }}/beautycops_nextjs
+
+on:
+  push:
+    branches: ["main"]   # or qa
+    paths-ignore:
+      - "docs/**"
+
+concurrency:
+  group: nextjs-main-release
+  cancel-in-progress: true
+
+jobs:
+  release-main:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.DOCKER_REGISTRY }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & Push QA image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.NEXTJS_IMAGE_NAME }}:main
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://testapi.beautycops.com/api
+          cache-from: |
+            type=registry,ref=${{ env.NEXTJS_IMAGE_NAME }}:main
+          cache-to: type=inline
