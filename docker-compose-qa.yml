@@ -1,0 +1,15 @@
+services:
+  nextjs:
+    container_name: beautycops-nextjs-qa
+    image: beautycops_nextjs:qa
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_BASE_URL: https://testapi.beautycops.com/api
+    restart: always
+    networks:
+      - nginx_default
+
+networks:
+  nginx_default:
+    external: true

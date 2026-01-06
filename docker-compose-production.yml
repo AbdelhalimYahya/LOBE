@@ -1,0 +1,15 @@
+services:
+  nextjs:
+    container_name: beautycops-nextjs-prod
+    image: beautycops_nextjs:latest
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_BASE_URL: https://api.beautycops.com/api
+    restart: always
+    networks:
+      - nginx_default
+
+networks:
+  nginx_default:
+    external: true

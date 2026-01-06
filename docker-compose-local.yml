@@ -1,0 +1,10 @@
+services:
+  nextjs:
+    container_name: beautycops-nextjs-local
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_BASE_URL: https://testapi.beautycops.com/api
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
