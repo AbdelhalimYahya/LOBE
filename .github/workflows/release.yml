@@ -2,7 +2,7 @@ name: Release Next.js (QA)
 
 env:
   DOCKER_BUILDKIT: 1
-  NEXTJS_IMAGE_NAME: ${{ vars.DOCKER_REGISTRY }}/beautycops_nextjs
+  NEXTJS_IMAGE_NAME: ${{ vars.DOCKER_USERNAME }}/beautycops_nextjs
 
 on:
   push:
