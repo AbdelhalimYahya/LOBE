@@ -1,3 +1,6 @@
 module.exports = {
-  output: "standalone",
-};
+  output: 'standalone',
+  experimental: {
+    serverActions: true
+  }
+}
