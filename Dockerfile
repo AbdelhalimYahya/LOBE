@@ -37,12 +37,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-
-# Copy only the necessary files from builder
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/package-lock.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
+# Only what is needed at runtime
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
 CMD ["npm", "start"]

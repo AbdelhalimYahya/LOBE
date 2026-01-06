@@ -1,6 +1,8 @@
 module.exports = {
-  output: 'standalone',
+  output: "standalone",
   experimental: {
-    serverActions: true
-  }
-}
+    serverActions: {
+      allowedOrigins: ['beautycops.com', '*.beautycops.com'],
+    },
+  },
+};
