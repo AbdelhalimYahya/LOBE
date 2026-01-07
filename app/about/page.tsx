@@ -4,10 +4,27 @@ import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import Link from "next/link";
 import Image from "next/image";
+import { useState, useEffect } from "react";
 
 export default function AboutPage() {
   const router = useRouter();
-  const isLoggedIn = false; // This would come from auth context/state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Check authentication status after mount to avoid hydration mismatch
+  useEffect(() => {
+    const checkAuth = () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        setIsLoggedIn(!!token);
+      } catch {
+        setIsLoggedIn(false);
+      }
+    };
+
+    // Use setTimeout to avoid synchronous setState
+    const timeoutId = setTimeout(checkAuth, 0);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   const handleBack = () => {
     router.back();
@@ -147,9 +164,9 @@ export default function AboutPage() {
             {/* Social Media Links */}
             <div className="flex flex-col gap-4">
               {/* X (Twitter) */}
-              <Link
-                href="#"
-                className="flex items-center gap-4 text-base text-natural-primary-text hover:text-brand-primary transition-colors"
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="flex items-center gap-4 text-base text-natural-primary-text hover:text-brand-primary transition-colors text-right"
               >
                 <div className="force-brand-primary flex-shrink-0">
                   <Icon
@@ -160,11 +177,13 @@ export default function AboutPage() {
                   />
                 </div>
                 <span>اكس</span>
-              </Link>
+              </button>
 
               {/* Instagram */}
               <Link
-                href="#"
+                href="https://www.instagram.com/beautycops.sa/?igsh=MWRsc3E3M2c2MDhsNw%3D%3D#"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-4 text-base text-natural-primary-text hover:text-brand-primary transition-colors"
               >
                 <div className="force-brand-primary flex-shrink-0">
@@ -180,7 +199,9 @@ export default function AboutPage() {
 
               {/* TikTok */}
               <Link
-                href="#"
+                href="https://www.tiktok.com/@beautycops.sa?_r=1&_t=ZS-92gAKNDqiKv"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-4 text-base text-natural-primary-text hover:text-brand-primary transition-colors"
               >
                 <div className="force-brand-primary flex-shrink-0">
@@ -196,7 +217,9 @@ export default function AboutPage() {
 
               {/* LinkedIn */}
               <Link
-                href="#"
+                href="https://www.linkedin.com/company/beautycops/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-4 text-base text-natural-primary-text hover:text-brand-primary transition-colors"
               >
                 <div className="force-brand-primary flex-shrink-0">

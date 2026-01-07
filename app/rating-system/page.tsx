@@ -4,10 +4,27 @@ import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import Link from "next/link";
 import Image from "next/image";
+import { useState, useEffect } from "react";
 
 export default function RatingSystemPage() {
   const router = useRouter();
-  const isLoggedIn = false; // This would come from auth context/state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Check authentication status after mount to avoid hydration mismatch
+  useEffect(() => {
+    const checkAuth = () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        setIsLoggedIn(!!token);
+      } catch {
+        setIsLoggedIn(false);
+      }
+    };
+
+    // Use setTimeout to avoid synchronous setState
+    const timeoutId = setTimeout(checkAuth, 0);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   const handleBack = () => {
     router.push("/account");

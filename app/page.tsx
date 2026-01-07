@@ -2,6 +2,7 @@
 import { HomeFooter, MainNavbar } from "@/components";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import Link from "next/link";
 import Image from "next/image";
@@ -47,6 +48,16 @@ const Home = () => {
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchDropdownRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
+
+  // Handle search focus - redirect to login if not authenticated
+  const handleSearchFocus = () => {
+    if (!isLogin) {
+      router.push('/login');
+      return;
+    }
+    setSearchDropdownOpen(true);
+  };
 
   const [activeBanner, setActiveBanner] = useState(0);
   const [isLogin, setIsLogin] = useState(false);
@@ -140,8 +151,15 @@ const Home = () => {
     fetchMostSearchedProducts();
   }, [isLogin]);
 
-  // Search suggestions effect
+  // Search suggestions effect - ONLY IF LOGIN
   useEffect(() => {
+    // Don't search if not logged in
+    if (!isLogin) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+      return;
+    }
+
     const q = searchQuery.trim();
     if (q.length < 2) {
       setSearchSuggestions([]);
@@ -220,7 +238,7 @@ const Home = () => {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [searchQuery]);
+  }, [searchQuery, isLogin]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -410,7 +428,7 @@ const Home = () => {
                   placeholder="ابحث باسم المنتج"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setSearchDropdownOpen(true)}
+                  onFocus={handleSearchFocus}
                   className="flex-1 bg-transparent border-0 outline-none px-4 sm:px-6 md:px-8 text-sm sm:text-base md:text-lg text-natural-primary-text placeholder:text-natural-input-hint h-14 md:h-16"
                   dir="rtl"
                 />
@@ -418,6 +436,7 @@ const Home = () => {
                 {/* Circular Search Button - Left side in RTL */}
                 <button
                   type="button"
+                  onClick={() => !isLogin && router.push('/login')}
                   className="flex-shrink-0 w-[42px] h-[42px] md:w-12 md:h-12 rounded-full flex items-center justify-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary"
                   style={{
                     background:

@@ -20,7 +20,7 @@ export default function RegisterPage() {
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const handleBack = () => {
-    router.back();
+    router.push('/');
   };
 
   const validatePassword = (pwd: string): string | null => {

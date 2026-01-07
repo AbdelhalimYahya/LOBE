@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Icon from "./Icon";
 
 /**
@@ -43,6 +45,7 @@ export default function HomeFooter({
   address = "شارع العليا، حي الغدير, الرياض 13311 - المملكة العربية السعودية",
   email = "Info@BeautyCops.com",
 }: HomeFooterProps) {
+  const router = useRouter();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -75,25 +78,48 @@ export default function HomeFooter({
 
         {/* Social Media Icons */}
         <div className="mb-8 flex sm:justify-center gap-4 md:mb-10 md:gap-6">
-          {socialLinks.map((social) => (
-            <a
-              key={social.name}
-              href={social.href}
-              aria-label={social.name}
-              className="hover:opacity-80 cursor-pointer transition-all"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <div className="force-brand-primary hover:opacity-80 cursor-pointer transition-all">
-                <Icon
-                  name={social.iconName}
-                  size={24}
-                  category="brands"
-                  className="text-brand-primary md:w-6 md:h-6"
-                />
-              </div>
-            </a>
-          ))}
+          {socialLinks.map((social) => {
+            // Handle Twitter/X link to navigate to home page
+            if (social.name === "X (Twitter)") {
+              return (
+                <button
+                  key={social.name}
+                  onClick={() => router.push('/')}
+                  aria-label={social.name}
+                  className="hover:opacity-80 cursor-pointer transition-all"
+                >
+                  <div className="force-brand-primary hover:opacity-80 cursor-pointer transition-all">
+                    <Icon
+                      name={social.iconName}
+                      size={24}
+                      category="brands"
+                      className="text-brand-primary md:w-6 md:h-6"
+                    />
+                  </div>
+                </button>
+              );
+            }
+
+            return (
+              <a
+                key={social.name}
+                href={social.href}
+                aria-label={social.name}
+                className="hover:opacity-80 cursor-pointer transition-all"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div className="force-brand-primary hover:opacity-80 cursor-pointer transition-all">
+                  <Icon
+                    name={social.iconName}
+                    size={24}
+                    category="brands"
+                    className="text-brand-primary md:w-6 md:h-6"
+                  />
+                </div>
+              </a>
+            );
+          })}
         </div>
 
         {/* Contact Information */}

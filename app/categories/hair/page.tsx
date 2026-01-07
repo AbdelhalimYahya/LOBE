@@ -365,7 +365,7 @@ function HairCategoryPageContent() {
               <>
                 {products.length === 0 ? (
                   <p className="text-center text-muted-foreground py-10">
-                    لا توجد منتجات مطابقة للفلاتر الحالية.
+                    سيتم توفير المنتجات قريبا
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">

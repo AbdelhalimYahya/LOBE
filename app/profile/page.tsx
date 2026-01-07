@@ -340,6 +340,14 @@ export default function ProfilePage() {
             >
               {isSaving ? "جاري الحفظ..." : "حفظ التغييرات"}
             </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="md:hidden w-full h-12 mt-2 rounded-lg border border-status-error text-status-error font-medium hover:bg-status-error/5 transition-colors"
+            >
+              تسجيل الخروج
+            </button>
           </form>
         </div>
       </main>

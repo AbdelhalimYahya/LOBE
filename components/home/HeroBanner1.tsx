@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React from "react";
 import Button from "../Button";
 import Image from "next/image";
 import { homeHeroImage } from "@/assets";
 
 const HeroBanner1 = () => {
+  const router = useRouter();
+
   return (
     <section className="mb-6 md:mb-8 lg:mb-12">
       <div className="relative overflow-hidden rounded-2xl h-[200px] md:h-[280px] lg:h-[320px] xl:h-[360px] flex items-center">
@@ -28,6 +31,11 @@ const HeroBanner1 = () => {
               <Button
                 variant="primary"
                 onClick={() => {
+                  const token = localStorage.getItem("authToken"); // Simple auth check
+                  if (!token) {
+                    router.push("/login");
+                    return;
+                  }
                   const searchInput = document.getElementById("home-search-input");
                   if (searchInput) {
                     searchInput.scrollIntoView({ behavior: "smooth", block: "center" });

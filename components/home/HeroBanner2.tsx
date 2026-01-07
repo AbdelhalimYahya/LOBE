@@ -1,10 +1,12 @@
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React from "react";
 import Button from "../Button";
 import Image from "next/image";
 import { homeHeroImage2 } from "@/assets";
 
 const HeroBanner2 = () => {
+  const router = useRouter();
+
   return (
     <section className="mb-6 md:mb-8 lg:mb-12">
       <div className="relative overflow-hidden rounded-2xl h-[200px] md:h-[280px] lg:h-[320px] xl:h-[360px] flex items-center">
@@ -25,14 +27,20 @@ const HeroBanner2 = () => {
               <p className="text-[13px] sm:text-sm md:text-base lg:text-lg xl:text-xl text-brand-primary mb-4 md:mb-5 lg:mb-6 xl:mb-8 md:max-w-[90%] lg:max-w-[85%]">
                 اكتشف روابط شراء موثوقة لأفضل المنتجات
               </p>
-              <Link href="/products" className="inline-block">
-                <Button
-                  variant="primary"
-                  className="!w-fit !px-6 md:!px-8 lg:!px-10 h-[36px] md:h-[44px] lg:h-[48px] text-sm md:text-base lg:text-lg font-[500] rounded-full flex items-center justify-center"
-                >
-                  اكتشف المنتجات
-                </Button>
-              </Link>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const token = localStorage.getItem("authToken");
+                  if (!token) {
+                    router.push("/login");
+                  } else {
+                    router.push("/products");
+                  }
+                }}
+                className="!w-fit !px-6 md:!px-8 lg:!px-10 h-[36px] md:h-[44px] lg:h-[48px] text-sm md:text-base lg:text-lg font-[500] rounded-full flex items-center justify-center"
+              >
+                اكتشف المنتجات
+              </Button>
             </div>
           </div>
           {/* Image - Right side in RTL */}

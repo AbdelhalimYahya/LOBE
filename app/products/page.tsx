@@ -147,9 +147,33 @@ export default function ProductsPage() {
         </div>
       }
     >
-      <ProductsPageContent />
+      <AuthenticatedProductsPage />
     </Suspense>
   );
+}
+
+function AuthenticatedProductsPage() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Check authentication status
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      setIsAuthenticated(true);
+    }
+  }, [router]);
+
+  // Return early if not authenticated to prevent any API calls
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return <ProductsPageContent />;
 }
 
 function ProductsPageContent() {
@@ -206,6 +230,14 @@ function ProductsPageContent() {
   const [selectedBrand, setSelectedBrand] = useState("all");
   const [brandsList, setBrandsList] = useState<BrandOption[]>([]);
   const [hiddenProducts, setHiddenProducts] = useState<Set<string>>(new Set());
+
+  const [searchSuggestions, setSearchSuggestions] = useState<
+    Array<{ id: number; category: "skincare" | "makeup" | "haircare"; name: string }>
+  >([]);
+  const [searchSuggestionsLoading, setSearchSuggestionsLoading] = useState(false);
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const searchDropdownRef = useRef<HTMLDivElement | null>(null);
+  const searchCacheRef = useRef<Map<string, Array<{ id: number; category: "skincare" | "makeup" | "haircare"; name: string }>>>(new Map());
 
   useEffect(() => {
     const read = () => {

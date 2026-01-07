@@ -67,7 +67,7 @@ export default function LoginPage() {
   };
 
   const handleBack = () => {
-    router.back();
+    router.push('/');
   };
 
   return (
